@@ -2,20 +2,21 @@ import { useState } from "react";
 
 const API_URL = "http://localhost:3000";
 
-function Login({ onLogin, onVolver }) {
+function Login({ onLoginExitoso }) {
   const [modo, setModo] = useState("login");
 
+  // Inicio de sesión
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
+  const [mostrarContrasena, setMostrarContrasena] = useState(false);
 
+  // Registro
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [confirmarContrasena, setConfirmarContrasena] = useState("");
   const [rol, setRol] = useState("pasajero");
-
-  const [mostrarContrasena, setMostrarContrasena] = useState(false);
-  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
+  const [mostrarContrasenaRegistro, setMostrarContrasenaRegistro] =
+    useState(false);
 
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
@@ -27,10 +28,6 @@ function Login({ onLogin, onVolver }) {
     setMensaje("");
   };
 
-  // =====================================================
-  // INICIAR SESIÓN
-  // =====================================================
-
   const iniciarSesion = async (e) => {
     e.preventDefault();
 
@@ -38,13 +35,13 @@ function Login({ onLogin, onVolver }) {
     setMensaje("");
 
     if (!correo.trim() || !contrasena) {
-      setError("Ingresa tu correo y contraseña.");
+      setError("Completa el correo electrónico y la contraseña.");
       return;
     }
 
-    setCargando(true);
-
     try {
+      setCargando(true);
+
       const respuesta = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: {
@@ -64,57 +61,21 @@ function Login({ onLogin, onVolver }) {
         );
       }
 
-      if (!datos.usuario) {
-        throw new Error(
-          "El servidor no devolvió la información del usuario."
-        );
+      if (onLoginExitoso) {
+        onLoginExitoso(datos.usuario);
       }
-
-      const usuario = {
-        ...datos.usuario,
-        id_usuario:
-          datos.usuario.id_usuario ??
-          datos.usuario.id ??
-          datos.usuario.usuario_id,
-      };
-
-      if (!usuario.id_usuario) {
-        throw new Error(
-          "No se encontró el identificador del usuario."
-        );
-      }
-
-      localStorage.setItem(
-        "tdea_go_usuario",
-        JSON.stringify(usuario)
-      );
-
-      onLogin(usuario);
     } catch (error) {
       console.error("Error al iniciar sesión:", error);
 
-      if (
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("NetworkError")
-      ) {
-        setError(
-          "No se pudo conectar con el servidor TdeA GO. Verifica que el servidor esté ejecutándose."
-        );
-      } else {
-        setError(
-          error.message || "No fue posible iniciar sesión."
-        );
-      }
+      setError(
+        error.message || "Ocurrió un error al iniciar sesión."
+      );
     } finally {
       setCargando(false);
     }
   };
 
-  // =====================================================
-  // REGISTRO
-  // =====================================================
-
-  const registrarse = async (e) => {
+  const registrarUsuario = async (e) => {
     e.preventDefault();
 
     setError("");
@@ -125,10 +86,9 @@ function Login({ onLogin, onVolver }) {
       !apellido.trim() ||
       !correo.trim() ||
       !telefono.trim() ||
-      !contrasena ||
-      !confirmarContrasena
+      !contrasena
     ) {
-      setError("Completa todos los campos obligatorios.");
+      setError("Completa todos los campos para crear tu cuenta.");
       return;
     }
 
@@ -137,286 +97,104 @@ function Login({ onLogin, onVolver }) {
       return;
     }
 
-    if (contrasena !== confirmarContrasena) {
-      setError("Las contraseñas no coinciden.");
-      return;
-    }
-
-    if (rol !== "pasajero" && rol !== "conductor") {
-      setError("Selecciona un rol válido.");
-      return;
-    }
-
-    setCargando(true);
-
     try {
-      // -------------------------------------------------
-      // Crear cuenta
-      // -------------------------------------------------
+      setCargando(true);
 
-      const respuestaRegistro = await fetch(
-        `${API_URL}/api/usuarios`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            nombre: nombre.trim(),
-            apellido: apellido.trim(),
-            correo: correo.trim(),
-            telefono: telefono.trim(),
-            contrasena,
-            rol,
-          }),
-        }
-      );
+      const respuesta = await fetch(`${API_URL}/api/usuarios`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          apellido: apellido.trim(),
+          correo: correo.trim(),
+          telefono: telefono.trim(),
+          contrasena,
+          rol,
+        }),
+      });
 
-      const datosRegistro = await respuestaRegistro.json();
+      const datos = await respuesta.json();
 
-      if (!respuestaRegistro.ok) {
+      if (!respuesta.ok) {
         throw new Error(
-          datosRegistro.mensaje ||
-            "No fue posible crear la cuenta."
+          datos.mensaje || "No fue posible crear la cuenta."
         );
       }
 
-      // -------------------------------------------------
-      // Iniciar sesión automáticamente
-      // -------------------------------------------------
-
-      const respuestaLogin = await fetch(
-        `${API_URL}/api/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            correo: correo.trim(),
-            contrasena,
-          }),
-        }
+      setMensaje(
+        "Cuenta creada correctamente. Ahora puedes iniciar sesión."
       );
 
-      const datosLogin = await respuestaLogin.json();
+      setNombre("");
+      setApellido("");
+      setCorreo("");
+      setTelefono("");
+      setContrasena("");
+      setRol("pasajero");
 
-      // -------------------------------------------------
-      // La cuenta fue creada, pero el login automático
-      // no funcionó.
-      // -------------------------------------------------
-
-      if (!respuestaLogin.ok || !datosLogin.usuario) {
-        setMensaje(
-          "Cuenta creada correctamente. Ahora puedes iniciar sesión."
-        );
-
+      setTimeout(() => {
         setModo("login");
-        setContrasena("");
-        setConfirmarContrasena("");
-
-        return;
-      }
-
-      // -------------------------------------------------
-      // Usuario creado y autenticado correctamente
-      // -------------------------------------------------
-
-      const usuario = {
-        ...datosLogin.usuario,
-        id_usuario:
-          datosLogin.usuario.id_usuario ??
-          datosLogin.usuario.id ??
-          datosLogin.usuario.usuario_id,
-      };
-
-      if (!usuario.id_usuario) {
-        setMensaje(
-          "Cuenta creada correctamente. Ahora puedes iniciar sesión."
-        );
-
-        setModo("login");
-        setContrasena("");
-        setConfirmarContrasena("");
-
-        return;
-      }
-
-      localStorage.setItem(
-        "tdea_go_usuario",
-        JSON.stringify(usuario)
-      );
-
-      onLogin(usuario);
+        setMensaje("");
+      }, 1800);
     } catch (error) {
-      console.error("Error durante el registro:", error);
+      console.error("Error al registrar usuario:", error);
 
-      if (
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("NetworkError")
-      ) {
-        setError(
-          "No se pudo conectar con el servidor TdeA GO. Verifica que el servidor esté ejecutándose."
-        );
-      } else {
-        setError(
-          error.message || "No fue posible crear la cuenta."
-        );
-      }
+      setError(
+        error.message || "Ocurrió un error al crear la cuenta."
+      );
     } finally {
       setCargando(false);
     }
   };
 
-  // =====================================================
-  // RECUPERAR CONTRASEÑA
-  // =====================================================
-
-  const recuperarContrasena = () => {
-    alert(
-      "La recuperación de contraseña estará disponible próximamente."
-    );
-  };
-
-  // =====================================================
-  // INTERFAZ
-  // =====================================================
-
   return (
-    <div className="login-page">
-      <div className="login-background-decoration decoration-one"></div>
-      <div className="login-background-decoration decoration-two"></div>
+    <div className="login-container">
+      <div className="login-brand">
+        <span className="login-brand-tdea">TdeA</span>
+        <span className="login-brand-go">GO</span>
+      </div>
 
-      <div className="login-card">
-
-        {/* VOLVER */}
-        <button
-          type="button"
-          className="login-back-button"
-          onClick={onVolver}
-        >
-          ← Volver
-        </button>
-
-        {/* MARCA */}
-        <div className="login-brand">
-          <div className="login-brand-icon">
-            🚗
+      {modo === "login" ? (
+        <>
+          <div className="login-header">
+            <h2>Inicia sesión</h2>
+            <p>Ingresa para continuar</p>
           </div>
 
-          <div>
-            <strong>TdeA</strong>
-            <span translate="no">GO</span>
-          </div>
-        </div>
-
-        {/* ENCABEZADO */}
-        <div className="login-header">
-          <h1>
-            {modo === "login"
-              ? "Bienvenido de nuevo"
-              : "Crea tu cuenta"}
-          </h1>
-
-          <p>
-            {modo === "login"
-              ? "Ingresa para continuar usando TdeA GO."
-              : "Únete a la comunidad de transporte compartido del TdeA."}
-          </p>
-        </div>
-
-        {/* CAMBIO DE MODO */}
-        <div className="login-mode-buttons">
-          <button
-            type="button"
-            className={`login-mode ${
-              modo === "login" ? "active" : ""
-            }`}
-            onClick={() => cambiarModo("login")}
-          >
-            Iniciar sesión
-          </button>
-
-          <button
-            type="button"
-            className={`login-mode ${
-              modo === "registro" ? "active" : ""
-            }`}
-            onClick={() => cambiarModo("registro")}
-          >
-            Registrarse
-          </button>
-        </div>
-
-        {/* MENSAJES */}
-        {error && (
-          <div className="login-message login-error">
-            <span>!</span>
-            <p>{error}</p>
-          </div>
-        )}
-
-        {mensaje && (
-          <div className="login-message login-success">
-            <span>✓</span>
-            <p>{mensaje}</p>
-          </div>
-        )}
-
-        {/* =================================================
-            INICIO DE SESIÓN
-        ================================================== */}
-
-        {modo === "login" && (
-          <form
-            className="login-form"
-            onSubmit={iniciarSesion}
-          >
-            <div className="form-group">
-              <label htmlFor="correo">
-                Correo electrónico
-              </label>
+          <form className="login-form" onSubmit={iniciarSesion}>
+            <div className="login-field">
+              <label htmlFor="correo">Correo electrónico</label>
 
               <input
                 id="correo"
                 type="email"
-                placeholder="ejemplo@correo.com"
                 value={correo}
                 onChange={(e) => setCorreo(e.target.value)}
+                placeholder="tu correo"
                 autoComplete="email"
-                required
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="contrasena">
-                Contraseña
-              </label>
+            <div className="login-field">
+              <label htmlFor="contrasena">Contraseña</label>
 
-              <div className="password-input-wrapper">
+              <div className="password-wrapper">
                 <input
                   id="contrasena"
-                  type={
-                    mostrarContrasena
-                      ? "text"
-                      : "password"
-                  }
-                  placeholder="Ingresa tu contraseña"
+                  type={mostrarContrasena ? "text" : "password"}
                   value={contrasena}
-                  onChange={(e) =>
-                    setContrasena(e.target.value)
-                  }
+                  onChange={(e) => setContrasena(e.target.value)}
+                  placeholder="Ingresa tu contraseña"
                   autoComplete="current-password"
-                  required
                 />
 
                 <button
                   type="button"
                   className="password-toggle"
                   onClick={() =>
-                    setMostrarContrasena(
-                      !mostrarContrasena
-                    )
+                    setMostrarContrasena(!mostrarContrasena)
                   }
                   aria-label={
                     mostrarContrasena
@@ -430,312 +208,222 @@ function Login({ onLogin, onVolver }) {
             </div>
 
             <div className="login-options">
-              <label className="remember-option">
-                <input type="checkbox" />
-                <span>Recordarme</span>
-              </label>
-
               <button
                 type="button"
                 className="forgot-password"
-                onClick={recuperarContrasena}
+                onClick={() =>
+                  setError(
+                    "La recuperación de contraseña estará disponible próximamente."
+                  )
+                }
               >
                 ¿Olvidaste tu contraseña?
               </button>
             </div>
 
+            {error && (
+              <div className="login-error" role="alert">
+                <span className="login-error-icon">!</span>
+                <span>{error}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               className="login-submit"
               disabled={cargando}
             >
-              {cargando ? (
-                <>
-                  <span className="login-spinner"></span>
-                  Ingresando...
-                </>
-              ) : (
-                <>
-                  Iniciar sesión
-                  <span>→</span>
-                </>
-              )}
+              {cargando ? "Ingresando..." : "Iniciar sesión"}
             </button>
           </form>
-        )}
 
-        {/* =================================================
-            REGISTRO
-        ================================================== */}
+          <div className="login-register">
+            <span>¿No tienes una cuenta?</span>
 
-        {modo === "registro" && (
+            <button
+              type="button"
+              onClick={() => cambiarModo("registro")}
+            >
+              Crear cuenta
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="login-header register-header">
+            <h2>Crear una cuenta</h2>
+            <p>Únete a la comunidad TdeA</p>
+          </div>
+
           <form
-            className="login-form"
-            onSubmit={registrarse}
+            className="login-form register-form"
+            onSubmit={registrarUsuario}
           >
-            {/* DATOS PERSONALES */}
             <div className="register-grid">
-              <div className="form-group">
-                <label htmlFor="nombre">
-                  Nombre
-                </label>
+              <div className="login-field">
+                <label htmlFor="nombre">Nombre</label>
 
                 <input
                   id="nombre"
                   type="text"
-                  placeholder="Tu nombre"
                   value={nombre}
-                  onChange={(e) =>
-                    setNombre(e.target.value)
-                  }
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Tu nombre"
                   autoComplete="given-name"
-                  required
                 />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="apellido">
-                  Apellido
-                </label>
+              <div className="login-field">
+                <label htmlFor="apellido">Apellido</label>
 
                 <input
                   id="apellido"
                   type="text"
-                  placeholder="Tu apellido"
                   value={apellido}
-                  onChange={(e) =>
-                    setApellido(e.target.value)
-                  }
+                  onChange={(e) => setApellido(e.target.value)}
+                  placeholder="Tu apellido"
                   autoComplete="family-name"
-                  required
                 />
               </div>
             </div>
 
-            {/* CONTACTO */}
-            <div className="register-grid">
-              <div className="form-group">
-                <label htmlFor="correo-registro">
-                  Correo electrónico
-                </label>
-
-                <input
-                  id="correo-registro"
-                  type="email"
-                  placeholder="ejemplo@correo.com"
-                  value={correo}
-                  onChange={(e) =>
-                    setCorreo(e.target.value)
-                  }
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="telefono">
-                  Teléfono
-                </label>
-
-                <input
-                  id="telefono"
-                  type="tel"
-                  placeholder="300 000 0000"
-                  value={telefono}
-                  onChange={(e) =>
-                    setTelefono(e.target.value)
-                  }
-                  autoComplete="tel"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* TIPO DE USUARIO */}
-            <div className="form-group">
-              <label>
-                ¿Cómo utilizarás TdeA GO?
+            <div className="login-field">
+              <label htmlFor="correoRegistro">
+                Correo electrónico
               </label>
 
-              <div className="role-buttons">
+              <input
+                id="correoRegistro"
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                placeholder="tu correo"
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="telefono">Teléfono</label>
+
+              <input
+                id="telefono"
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder="Tu número de teléfono"
+                autoComplete="tel"
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="contrasenaRegistro">
+                Contraseña
+              </label>
+
+              <div className="password-wrapper">
+                <input
+                  id="contrasenaRegistro"
+                  type={
+                    mostrarContrasenaRegistro
+                      ? "text"
+                      : "password"
+                  }
+                  value={contrasena}
+                  onChange={(e) => setContrasena(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  autoComplete="new-password"
+                />
+
                 <button
                   type="button"
-                  className={`role-button ${
-                    rol === "pasajero"
-                      ? "selected"
-                      : ""
-                  }`}
+                  className="password-toggle"
                   onClick={() =>
-                    setRol("pasajero")
+                    setMostrarContrasenaRegistro(
+                      !mostrarContrasenaRegistro
+                    )
+                  }
+                  aria-label={
+                    mostrarContrasenaRegistro
+                      ? "Ocultar contraseña"
+                      : "Mostrar contraseña"
                   }
                 >
-                  <span className="role-icon">
-                    🧑‍🎓
-                  </span>
+                  {mostrarContrasenaRegistro ? "◉" : "○"}
+                </button>
+              </div>
+            </div>
+
+            <div className="role-section">
+              <label>Tipo de usuario</label>
+
+              <div className="role-options">
+                <button
+                  type="button"
+                  className={`role-option ${
+                    rol === "pasajero" ? "selected" : ""
+                  }`}
+                  onClick={() => setRol("pasajero")}
+                >
+                  <span className="role-icon">○</span>
 
                   <span>
                     <strong>Pasajero</strong>
-                    <small>
-                      Quiero encontrar rutas
-                    </small>
+                    <small>Busco un cupo</small>
                   </span>
                 </button>
 
                 <button
                   type="button"
-                  className={`role-button ${
-                    rol === "conductor"
-                      ? "selected"
-                      : ""
+                  className={`role-option ${
+                    rol === "conductor" ? "selected" : ""
                   }`}
-                  onClick={() =>
-                    setRol("conductor")
-                  }
+                  onClick={() => setRol("conductor")}
                 >
-                  <span className="role-icon">
-                    🚗
-                  </span>
+                  <span className="role-icon">⌁</span>
 
                   <span>
                     <strong>Conductor</strong>
-                    <small>
-                      Quiero compartir mi ruta
-                    </small>
+                    <small>Ofrezco un cupo</small>
                   </span>
                 </button>
               </div>
             </div>
 
-            {/* CONTRASEÑAS */}
-            <div className="register-grid">
-              <div className="form-group">
-                <label htmlFor="contrasena-registro">
-                  Contraseña
-                </label>
-
-                <div className="password-input-wrapper">
-                  <input
-                    id="contrasena-registro"
-                    type={
-                      mostrarContrasena
-                        ? "text"
-                        : "password"
-                    }
-                    placeholder="Mínimo 6 caracteres"
-                    value={contrasena}
-                    onChange={(e) =>
-                      setContrasena(e.target.value)
-                    }
-                    autoComplete="new-password"
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() =>
-                      setMostrarContrasena(
-                        !mostrarContrasena
-                      )
-                    }
-                    aria-label={
-                      mostrarContrasena
-                        ? "Ocultar contraseña"
-                        : "Mostrar contraseña"
-                    }
-                  >
-                    {mostrarContrasena ? "◉" : "○"}
-                  </button>
-                </div>
+            {error && (
+              <div className="login-error" role="alert">
+                <span className="login-error-icon">!</span>
+                <span>{error}</span>
               </div>
+            )}
 
-              <div className="form-group">
-                <label htmlFor="confirmar-contrasena">
-                  Confirmar contraseña
-                </label>
-
-                <div className="password-input-wrapper">
-                  <input
-                    id="confirmar-contrasena"
-                    type={
-                      mostrarConfirmacion
-                        ? "text"
-                        : "password"
-                    }
-                    placeholder="Repite tu contraseña"
-                    value={confirmarContrasena}
-                    onChange={(e) =>
-                      setConfirmarContrasena(
-                        e.target.value
-                      )
-                    }
-                    autoComplete="new-password"
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() =>
-                      setMostrarConfirmacion(
-                        !mostrarConfirmacion
-                      )
-                    }
-                    aria-label={
-                      mostrarConfirmacion
-                        ? "Ocultar contraseña"
-                        : "Mostrar contraseña"
-                    }
-                  >
-                    {mostrarConfirmacion ? "◉" : "○"}
-                  </button>
-                </div>
+            {mensaje && (
+              <div className="login-success" role="status">
+                <span className="login-success-icon">✓</span>
+                <span>{mensaje}</span>
               </div>
-            </div>
+            )}
 
-            {/* CREAR CUENTA */}
             <button
               type="submit"
-              className="login-submit"
+              className="login-submit register-submit"
               disabled={cargando}
             >
-              {cargando ? (
-                <>
-                  <span className="login-spinner"></span>
-                  Creando cuenta...
-                </>
-              ) : (
-                <>
-                  Crear cuenta
-                  <span>→</span>
-                </>
-              )}
+              {cargando ? "Creando cuenta..." : "Crear cuenta"}
             </button>
           </form>
-        )}
 
-        {/* PIE */}
-        <div className="login-footer">
-          {modo === "login"
-            ? "¿Aún no tienes una cuenta?"
-            : "¿Ya tienes una cuenta?"}
+          <div className="login-register">
+            <span>¿Ya tienes una cuenta?</span>
 
-          <button
-            type="button"
-            onClick={() =>
-              cambiarModo(
-                modo === "login"
-                  ? "registro"
-                  : "login"
-              )
-            }
-          >
-            {modo === "login"
-              ? "Regístrate"
-              : "Inicia sesión"}
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              onClick={() => cambiarModo("login")}
+            >
+              Iniciar sesión
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

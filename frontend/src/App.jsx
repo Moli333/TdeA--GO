@@ -11,7 +11,8 @@ import MiCuenta from "./paginas/MiCuenta";
 import MisSolicitudes from "./paginas/MisSolicitudes";
 import MisRutas from "./paginas/MisRutas";
 
-const API_URL = "http://localhost:3000";
+// Asegúrate de usar el mismo puerto en el que corre tu backend (por ejemplo: http://localhost:5000 o http://localhost:3000)
+const API_URL = "http://localhost:5000";
 
 function Aplicacion() {
   const [usuario, setUsuario] = useState(null);
@@ -39,6 +40,9 @@ function Aplicacion() {
     );
 
     setMostrarLogin(false);
+
+    // Redirigir a la página de Mis Solicitudes tras iniciar sesión exitosamente
+    navegar("/mis-solicitudes");
   };
 
   const cerrarSesion = () => {
@@ -54,6 +58,12 @@ function Aplicacion() {
     }
 
     navegar(ruta);
+  };
+
+  // Obtener el nombre visible soportando tanto "nombre_completo" (Supabase) como "nombre"
+  const obtenerNombreUsuario = () => {
+    if (!usuario) return "Usuario";
+    return usuario.nombre_completo || usuario.nombre || "Usuario";
   };
 
   return (
@@ -126,11 +136,11 @@ function Aplicacion() {
                   onClick={() => navegar("/mi-cuenta")}
                 >
                   <span className="usuario-icono">
-                    {usuario.nombre?.charAt(0)?.toUpperCase() || "U"}
+                    {obtenerNombreUsuario().charAt(0).toUpperCase()}
                   </span>
 
                   <span className="usuario-nombre">
-                    {usuario.nombre || "Usuario"}
+                    {obtenerNombreUsuario()}
                   </span>
                 </button>
 

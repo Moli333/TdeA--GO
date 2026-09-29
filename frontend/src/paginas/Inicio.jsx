@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import CarroTdea from "../CarroTdea";
 
 function Inicio({ usuario, irAlServicio, abrirLogin }) {
   return (
@@ -15,12 +16,12 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               MOVILIDAD COMPARTIDA · TdeA
             </span>
 
-            <h1>
+            <h1 translate="no">
               Tu ruta.
               <br />
               Tu comunidad.
               <br />
-              <span>TdeA GO.</span>
+              <span translate="no">TdeA GO.</span>
             </h1>
 
             <p>
@@ -80,18 +81,10 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
 
         </div>
 
-        <div className="carretera-hero">
-
-          <div className="linea-carretera"></div>
-
-          <div className="carro-tdea">
-            <div className="carro-cuerpo"></div>
-            <div className="carro-techo"></div>
-            <div className="carro-rueda rueda-1"></div>
-            <div className="carro-rueda rueda-2"></div>
-          </div>
-
-        </div>
+<div className="carretera-hero">
+  <div className="linea-carretera"></div>
+  <CarroTdea />
+</div>
 
       </section>
 
@@ -391,7 +384,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               ¿LISTO PARA EMPEZAR?
             </span>
 
-            <h2>
+            <h2 translate="no">
               Encuentra tu próxima ruta con TdeA GO.
             </h2>
 

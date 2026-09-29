@@ -62,8 +62,8 @@ function Aplicacion() {
         <div className="contenedor encabezado-contenido">
 
           <Link to="/" className="marca-tdea">
-            <span className="marca-tdea-principal">TdeA</span>
-            <span className="marca-go">GO</span>
+            <span className="marca-tdea-principal" translate="no">TdeA</span>
+            <span className="marca-go" translate="no">GO</span>
           </Link>
 
           <nav className="navegacion-principal">
@@ -229,7 +229,7 @@ function Aplicacion() {
           <div>
             <div className="marca-tdea marca-footer">
               <span className="marca-tdea-principal">TdeA</span>
-              <span className="marca-go">GO</span>
+              <span className="marca-go" translate="no">GO</span>
             </div>
 
             <p>
@@ -237,8 +237,8 @@ function Aplicacion() {
             </p>
           </div>
 
-          <div className="pie-derechos">
-            © {new Date().getFullYear()} TdeA GO
+          <div className="pie-derechos" translate="no">
+           © {new Date().getFullYear()} TdeA GO
           </div>
 
         </div>

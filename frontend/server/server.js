@@ -1,13 +1,13 @@
 import express from "express";
 import cors from "cors";
-import mysql from "mysql2/promise";
-import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+
+import { supabase, supabaseAdmin } from "./config/supabase.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = 5000;
 
 // ---------------------------------------------------------
 // CONFIGURACIÓN GENERAL
@@ -16,37 +16,32 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+const db = supabaseAdmin || supabase;
 
 // ---------------------------------------------------------
-// FUNCIÓN PARA OBTENER UN USUARIO
+// FUNCIÓN PARA OBTENER PERFIL
 // ---------------------------------------------------------
 
-async function obtenerUsuarioPorId(id_usuario) {
-  const [usuarios] = await pool.query(
-    `
-      SELECT
-        id_usuario,
-        nombre,
-        apellido,
-        correo,
-        telefono,
-        rol
-      FROM usuarios
-      WHERE id_usuario = ?
-    `,
-    [id_usuario]
-  );
+async function obtenerPerfilPorId(id) {
+  const { data, error } = await db
+    .from("profiles")
+    .select(`
+      id,
+      nombre_completo,
+      correo,
+      telefono,
+      rol,
+      verificado,
+      creado_en
+    `)
+    .eq("id", id)
+    .maybeSingle();
 
-  return usuarios[0] || null;
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 // ---------------------------------------------------------
@@ -55,17 +50,24 @@ async function obtenerUsuarioPorId(id_usuario) {
 
 app.get("/", async (req, res) => {
   try {
-    await pool.query("SELECT 1");
+    const { error } = await db
+      .from("profiles")
+      .select("id")
+      .limit(1);
+
+    if (error) {
+      throw error;
+    }
 
     res.json({
       mensaje: "Servidor TdeA GO funcionando correctamente.",
-      base_datos: "Conectada",
+      base_datos: "Supabase / PostgreSQL conectada",
     });
   } catch (error) {
-    console.error("Error al conectar con MySQL:", error);
+    console.error("Error al comprobar Supabase:", error);
 
     res.status(500).json({
-      mensaje: "El servidor funciona, pero no fue posible conectar con MySQL.",
+      mensaje: "El servidor funciona, pero no fue posible consultar Supabase.",
     });
   }
 });
@@ -85,7 +87,6 @@ app.post("/api/usuarios", async (req, res) => {
       rol,
     } = req.body;
 
-    // Validar campos obligatorios
     if (
       !nombre ||
       !apellido ||
@@ -99,66 +100,88 @@ app.post("/api/usuarios", async (req, res) => {
       });
     }
 
-    // Validar rol
     if (rol !== "conductor" && rol !== "pasajero") {
       return res.status(400).json({
         mensaje: "El rol seleccionado no es válido.",
       });
     }
 
-    // Validar longitud de contraseña
     if (contrasena.length < 6) {
       return res.status(400).json({
         mensaje: "La contraseña debe tener mínimo 6 caracteres.",
       });
     }
 
-    // Verificar si el correo ya existe
-    const [usuariosExistentes] = await pool.query(
-      `
-        SELECT id_usuario
-        FROM usuarios
-        WHERE correo = ?
-      `,
-      [correo.trim()]
-    );
+    const correoLimpio = correo.trim().toLowerCase();
 
-    if (usuariosExistentes.length > 0) {
+    // Verificar si ya existe un perfil con ese correo
+    const { data: perfilExistente, error: errorPerfil } = await db
+      .from("profiles")
+      .select("id")
+      .eq("correo", correoLimpio)
+      .maybeSingle();
+
+    if (errorPerfil) {
+      throw errorPerfil;
+    }
+
+    if (perfilExistente) {
       return res.status(409).json({
         mensaje: "Ya existe una cuenta registrada con este correo.",
       });
     }
 
-    // Encriptar contraseña
-    const contrasenaEncriptada = await bcrypt.hash(contrasena, 10);
+    // Crear usuario en Supabase Auth
+    const { data: authData, error: authError } =
+      await supabase.auth.signUp({
+        email: correoLimpio,
+        password: contrasena,
+      });
 
-    // Crear usuario
-    const [resultado] = await pool.query(
-      `
-        INSERT INTO usuarios
-        (
-          nombre,
-          apellido,
-          correo,
-          telefono,
-          contrasena,
-          rol
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [
-        nombre.trim(),
-        apellido.trim(),
-        correo.trim(),
-        telefono.trim(),
-        contrasenaEncriptada,
+    if (authError) {
+      console.error("Error de Supabase Auth:", authError);
+
+      return res.status(400).json({
+        mensaje:
+          authError.message ||
+          "No fue posible crear la cuenta.",
+      });
+    }
+
+    if (!authData.user) {
+      return res.status(500).json({
+        mensaje: "Supabase no devolvió el usuario creado.",
+      });
+    }
+
+    // Crear perfil asociado al usuario de Auth
+    const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`;
+
+    const { data: perfil, error: errorCrearPerfil } = await db
+      .from("profiles")
+      .insert({
+        id: authData.user.id,
+        nombre_completo: nombreCompleto,
+        correo: correoLimpio,
+        telefono: telefono.trim(),
         rol,
-      ]
-    );
+        verificado: false,
+      })
+      .select()
+      .single();
+
+    if (errorCrearPerfil) {
+      console.error("Error al crear perfil:", errorCrearPerfil);
+
+      return res.status(500).json({
+        mensaje:
+          "La cuenta fue creada, pero no fue posible crear el perfil.",
+      });
+    }
 
     res.status(201).json({
       mensaje: "Usuario registrado correctamente.",
-      id_usuario: resultado.insertId,
+      usuario: perfil,
     });
   } catch (error) {
     console.error("Error al registrar usuario:", error);
@@ -183,56 +206,34 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    // Buscar usuario por correo
-    const [usuarios] = await pool.query(
-      `
-        SELECT
-          id_usuario,
-          nombre,
-          apellido,
-          correo,
-          telefono,
-          contrasena,
-          rol
-        FROM usuarios
-        WHERE correo = ?
-      `,
-      [correo.trim()]
-    );
+    const correoLimpio = correo.trim().toLowerCase();
 
-    if (usuarios.length === 0) {
+    // Autenticar mediante Supabase Auth
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: correoLimpio,
+        password: contrasena,
+      });
+
+    if (authError || !authData.user) {
       return res.status(401).json({
         mensaje: "El correo o la contraseña son incorrectos.",
       });
     }
 
-    const usuario = usuarios[0];
+    // Obtener perfil
+    const perfil = await obtenerPerfilPorId(authData.user.id);
 
-    // Comparar contraseña
-    const contrasenaCorrecta = await bcrypt.compare(
-      contrasena,
-      usuario.contrasena
-    );
-
-    if (!contrasenaCorrecta) {
-      return res.status(401).json({
-        mensaje: "El correo o la contraseña son incorrectos.",
+    if (!perfil) {
+      return res.status(404).json({
+        mensaje: "La cuenta existe, pero no tiene un perfil registrado.",
       });
     }
-
-    // Nunca enviamos la contraseña al frontend
-    const usuarioRespuesta = {
-      id_usuario: usuario.id_usuario,
-      nombre: usuario.nombre,
-      apellido: usuario.apellido,
-      correo: usuario.correo,
-      telefono: usuario.telefono,
-      rol: usuario.rol,
-    };
 
     res.json({
       mensaje: "Inicio de sesión exitoso.",
-      usuario: usuarioRespuesta,
+      usuario: perfil,
+      token: authData.session?.access_token || null,
     });
   } catch (error) {
     console.error("Error al iniciar sesión:", error);
@@ -249,14 +250,8 @@ app.post("/api/login", async (req, res) => {
 
 app.put("/api/usuarios/:id/rol", async (req, res) => {
   try {
-    const id_usuario = Number(req.params.id);
+    const id = req.params.id;
     const { rol } = req.body;
-
-    if (!Number.isInteger(id_usuario)) {
-      return res.status(400).json({
-        mensaje: "El identificador del usuario no es válido.",
-      });
-    }
 
     if (rol !== "conductor" && rol !== "pasajero") {
       return res.status(400).json({
@@ -264,8 +259,7 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
       });
     }
 
-    // Verificar que el usuario exista
-    const usuario = await obtenerUsuarioPorId(id_usuario);
+    const usuario = await obtenerPerfilPorId(id);
 
     if (!usuario) {
       return res.status(404).json({
@@ -273,22 +267,20 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
       });
     }
 
-    // Actualizar rol
-    await pool.query(
-      `
-        UPDATE usuarios
-        SET rol = ?
-        WHERE id_usuario = ?
-      `,
-      [rol, id_usuario]
-    );
+    const { data, error } = await db
+      .from("profiles")
+      .update({ rol })
+      .eq("id", id)
+      .select()
+      .single();
 
-    // Obtener usuario actualizado
-    const usuarioActualizado = await obtenerUsuarioPorId(id_usuario);
+    if (error) {
+      throw error;
+    }
 
     res.json({
       mensaje: "Rol actualizado correctamente.",
-      usuario: usuarioActualizado,
+      usuario: data,
     });
   } catch (error) {
     console.error("Error al cambiar el rol:", error);
@@ -305,21 +297,24 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
 
 app.get("/api/usuarios", async (req, res) => {
   try {
-    const [usuarios] = await pool.query(
-      `
-        SELECT
-          id_usuario,
-          nombre,
-          apellido,
-          correo,
-          telefono,
-          rol
-        FROM usuarios
-        ORDER BY id_usuario DESC
-      `
-    );
+    const { data, error } = await db
+      .from("profiles")
+      .select(`
+        id,
+        nombre_completo,
+        correo,
+        telefono,
+        rol,
+        verificado,
+        creado_en
+      `)
+      .order("creado_en", { ascending: false });
 
-    res.json(usuarios);
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
   } catch (error) {
     console.error("Error al consultar usuarios:", error);
 
@@ -339,57 +334,106 @@ app.get("/api/rutas", async (req, res) => {
       origen,
       destino,
       fecha,
-      hora,
     } = req.query;
 
-    let consulta = `
-      SELECT
-        r.id_ruta,
-        r.origen,
-        r.destino,
-        r.fecha,
-        r.hora,
-        r.cupos_totales,
-        r.cupos_disponibles,
-        r.id_conductor,
-        u.nombre AS nombre_conductor,
-        u.apellido AS apellido_conductor,
-        u.telefono AS telefono_conductor
-      FROM rutas r
-      INNER JOIN usuarios u
-        ON r.id_conductor = u.id_usuario
-      WHERE r.cupos_disponibles > 0
-    `;
-
-    const parametros = [];
+    let consulta = db
+      .from("rutas")
+      .select(`
+        id,
+        origen,
+        destino,
+        lat_origen,
+        lng_origen,
+        lat_destino,
+        lng_destino,
+        fecha_hora_salida,
+        cupos_totales,
+        cupos_disponibles,
+        tarifa_contribucion,
+        estado,
+        conductor_id,
+        profiles:conductor_id (
+          id,
+          nombre_completo,
+          telefono,
+          verificado
+        )
+      `)
+      .eq("estado", "programado")
+      .gt("cupos_disponibles", 0)
+      .order("fecha_hora_salida", { ascending: true });
 
     if (origen) {
-      consulta += " AND r.origen LIKE ?";
-      parametros.push(`%${origen}%`);
+      consulta = consulta.ilike("origen", `%${origen}%`);
     }
 
     if (destino) {
-      consulta += " AND r.destino LIKE ?";
-      parametros.push(`%${destino}%`);
+      consulta = consulta.ilike("destino", `%${destino}%`);
     }
 
     if (fecha) {
-      consulta += " AND r.fecha = ?";
-      parametros.push(fecha);
+      const inicio = `${fecha}T00:00:00`;
+      const fin = `${fecha}T23:59:59`;
+
+      consulta = consulta
+        .gte("fecha_hora_salida", inicio)
+        .lte("fecha_hora_salida", fin);
     }
 
-    if (hora) {
-      consulta += " AND r.hora = ?";
-      parametros.push(hora);
+    const { data, error } = await consulta;
+
+    if (error) {
+      throw error;
     }
 
-    consulta += `
-      ORDER BY
-        r.fecha ASC,
-        r.hora ASC
-    `;
+    const rutas = (data || []).map((ruta) => {
+      const conductor = Array.isArray(ruta.profiles)
+        ? ruta.profiles[0]
+        : ruta.profiles;
 
-    const [rutas] = await pool.query(consulta, parametros);
+      const fechaHora = ruta.fecha_hora_salida
+        ? new Date(ruta.fecha_hora_salida)
+        : null;
+
+return {
+  id: ruta.id,
+  origen: ruta.origen,
+  destino: ruta.destino,
+
+  lat_origen: ruta.lat_origen,
+  lng_origen: ruta.lng_origen,
+  lat_destino: ruta.lat_destino,
+  lng_destino: ruta.lng_destino,
+
+  fecha: fechaHora
+    ? fechaHora.toISOString().slice(0, 10)
+    : "",
+
+        hora: fechaHora
+          ? fechaHora.toTimeString().slice(0, 5)
+          : "",
+
+        fecha_hora_salida: ruta.fecha_hora_salida,
+
+        cupos_totales: ruta.cupos_totales,
+        cupos_disponibles: ruta.cupos_disponibles,
+
+        tarifa_contribucion: ruta.tarifa_contribucion,
+
+        estado: ruta.estado,
+
+        conductor_id: ruta.conductor_id,
+
+        conductor_nombre:
+          conductor?.nombre_completo || "Conductor",
+
+        conductor_telefono:
+          conductor?.telefono || "",
+
+        conductor_verificado:
+          conductor?.verificado || false,
+      };
+    });
 
     res.json(rutas);
   } catch (error) {
@@ -408,41 +452,27 @@ app.get("/api/rutas", async (req, res) => {
 app.post("/api/rutas", async (req, res) => {
   try {
     const {
+      conductor_id,
       id_conductor,
       origen,
       destino,
+      fecha_hora_salida,
       fecha,
       hora,
       cupos_totales,
+      tarifa_contribucion,
     } = req.body;
 
+    const idConductor = conductor_id || id_conductor;
+
     if (
-      !id_conductor ||
+      !idConductor ||
       !origen ||
       !destino ||
-      !fecha ||
-      !hora ||
       !cupos_totales
     ) {
       return res.status(400).json({
-        mensaje: "Todos los campos de la ruta son obligatorios.",
-      });
-    }
-
-    // Verificar que el usuario sea conductor
-    const [usuarios] = await pool.query(
-      `
-        SELECT id_usuario
-        FROM usuarios
-        WHERE id_usuario = ?
-          AND rol = 'conductor'
-      `,
-      [id_conductor]
-    );
-
-    if (usuarios.length === 0) {
-      return res.status(403).json({
-        mensaje: "Solo un usuario con rol de conductor puede publicar rutas.",
+        mensaje: "Faltan campos obligatorios para publicar la ruta.",
       });
     }
 
@@ -454,34 +484,60 @@ app.post("/api/rutas", async (req, res) => {
       });
     }
 
-    const [resultado] = await pool.query(
-      `
-        INSERT INTO rutas
-        (
-          id_conductor,
-          origen,
-          destino,
-          fecha,
-          hora,
-          cupos_totales,
-          cupos_disponibles
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id_conductor,
-        origen.trim(),
-        destino.trim(),
-        fecha,
-        hora,
-        cantidadCupos,
-        cantidadCupos,
-      ]
-    );
+    // Verificar que el usuario exista y sea conductor
+    const conductor = await obtenerPerfilPorId(idConductor);
+
+    if (!conductor) {
+      return res.status(404).json({
+        mensaje: "El conductor no existe.",
+      });
+    }
+
+    if (conductor.rol !== "conductor") {
+      return res.status(403).json({
+        mensaje:
+          "Solo un usuario con rol de conductor puede publicar rutas.",
+      });
+    }
+
+    // Admitir tanto fecha_hora_salida como fecha + hora
+    let fechaHoraSalida = fecha_hora_salida;
+
+    if (!fechaHoraSalida && fecha && hora) {
+      fechaHoraSalida = `${fecha}T${hora}:00`;
+    }
+
+    if (!fechaHoraSalida) {
+      return res.status(400).json({
+        mensaje: "La fecha y hora de salida son obligatorias.",
+      });
+    }
+
+    const { data, error } = await db
+      .from("rutas")
+      .insert({
+        conductor_id: idConductor,
+        origen: origen.trim(),
+        destino: destino.trim(),
+        fecha_hora_salida: fechaHoraSalida,
+        cupos_totales: cantidadCupos,
+        cupos_disponibles: cantidadCupos,
+        tarifa_contribucion:
+          tarifa_contribucion !== undefined
+            ? Number(tarifa_contribucion)
+            : 0,
+        estado: "programado",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     res.status(201).json({
       mensaje: "Ruta publicada correctamente.",
-      id_ruta: resultado.insertId,
+      ruta: data,
     });
   } catch (error) {
     console.error("Error al publicar ruta:", error);
@@ -497,134 +553,134 @@ app.post("/api/rutas", async (req, res) => {
 // ---------------------------------------------------------
 
 app.post("/api/solicitudes", async (req, res) => {
-  const conexion = await pool.getConnection();
-
   try {
     const {
+      viaje_id,
       id_ruta,
+      pasajero_id,
       id_pasajero,
+      punto_encuentro,
     } = req.body;
 
-    if (!id_ruta || !id_pasajero) {
-      conexion.release();
+    const rutaId = viaje_id || id_ruta;
+    const pasajeroId = pasajero_id || id_pasajero;
 
+    if (!rutaId || !pasajeroId) {
       return res.status(400).json({
         mensaje: "La ruta y el pasajero son obligatorios.",
       });
     }
 
-    await conexion.beginTransaction();
+    // Verificar pasajero
+    const pasajero = await obtenerPerfilPorId(pasajeroId);
 
-    // Verificar que el usuario sea pasajero
-    const [pasajeros] = await conexion.query(
-      `
-        SELECT id_usuario
-        FROM usuarios
-        WHERE id_usuario = ?
-          AND rol = 'pasajero'
-      `,
-      [id_pasajero]
-    );
-
-    if (pasajeros.length === 0) {
-      await conexion.rollback();
-      conexion.release();
-
-      return res.status(403).json({
-        mensaje: "Solo un usuario con rol de pasajero puede solicitar un cupo.",
+    if (!pasajero) {
+      return res.status(404).json({
+        mensaje: "El pasajero no existe.",
       });
     }
 
-    // Consultar ruta y bloquear el registro durante la operación
-    const [rutas] = await conexion.query(
-      `
-        SELECT
-          id_ruta,
-          cupos_disponibles
-        FROM rutas
-        WHERE id_ruta = ?
-        FOR UPDATE
-      `,
-      [id_ruta]
-    );
+    if (pasajero.rol !== "pasajero") {
+      return res.status(403).json({
+        mensaje:
+          "Solo un usuario con rol de pasajero puede solicitar un cupo.",
+      });
+    }
 
-    if (rutas.length === 0) {
-      await conexion.rollback();
-      conexion.release();
+    // Consultar ruta
+    const { data: ruta, error: errorRuta } = await db
+      .from("rutas")
+      .select(`
+        id,
+        cupos_disponibles,
+        estado
+      `)
+      .eq("id", rutaId)
+      .maybeSingle();
 
+    if (errorRuta) {
+      throw errorRuta;
+    }
+
+    if (!ruta) {
       return res.status(404).json({
         mensaje: "La ruta no existe.",
       });
     }
 
-    const ruta = rutas[0];
+    if (ruta.estado !== "programado") {
+      return res.status(400).json({
+        mensaje: "La ruta no está disponible para solicitudes.",
+      });
+    }
 
-    if (ruta.cupos_disponibles <= 0) {
-      await conexion.rollback();
-      conexion.release();
-
+    if (Number(ruta.cupos_disponibles) <= 0) {
       return res.status(400).json({
         mensaje: "La ruta ya no tiene cupos disponibles.",
       });
     }
 
-    // Verificar si el pasajero ya solicitó esa ruta
-    const [solicitudesExistentes] = await conexion.query(
-      `
-        SELECT id_solicitud
-        FROM solicitudes
-        WHERE id_ruta = ?
-          AND id_pasajero = ?
-      `,
-      [id_ruta, id_pasajero]
-    );
+    // Verificar solicitud existente
+    const { data: solicitudExistente, error: errorExistente } =
+      await db
+        .from("solicitudes_viaje")
+        .select("id, estado")
+        .eq("viaje_id", rutaId)
+        .eq("pasajero_id", pasajeroId)
+        .maybeSingle();
 
-    if (solicitudesExistentes.length > 0) {
-      await conexion.rollback();
-      conexion.release();
+    if (errorExistente) {
+      throw errorExistente;
+    }
 
+    if (solicitudExistente) {
       return res.status(409).json({
         mensaje: "Ya tienes una solicitud para esta ruta.",
       });
     }
 
     // Crear solicitud
-    const [resultado] = await conexion.query(
-      `
-        INSERT INTO solicitudes
-        (
-          id_ruta,
-          id_pasajero,
-          estado
-        )
-        VALUES (?, ?, 'pendiente')
-      `,
-      [id_ruta, id_pasajero]
-    );
+    const { data: solicitud, error: errorSolicitud } =
+      await db
+        .from("solicitudes_viaje")
+        .insert({
+          viaje_id: rutaId,
+          pasajero_id: pasajeroId,
+          punto_encuentro: punto_encuentro || null,
+          estado: "pendiente",
+        })
+        .select()
+        .single();
 
-    // Reservar el cupo
-    const nuevosCupos = ruta.cupos_disponibles - 1;
+    if (errorSolicitud) {
+      throw errorSolicitud;
+    }
 
-    await conexion.query(
-      `
-        UPDATE rutas
-        SET cupos_disponibles = ?
-        WHERE id_ruta = ?
-      `,
-      [nuevosCupos, id_ruta]
-    );
+    // Actualizar cupos disponibles
+    const nuevosCupos = Number(ruta.cupos_disponibles) - 1;
 
-    await conexion.commit();
-    conexion.release();
+    const { error: errorCupos } = await db
+      .from("rutas")
+      .update({
+        cupos_disponibles: nuevosCupos,
+      })
+      .eq("id", rutaId);
+
+    if (errorCupos) {
+      // Intentar eliminar la solicitud si la actualización del cupo falla
+      await db
+        .from("solicitudes_viaje")
+        .delete()
+        .eq("id", solicitud.id);
+
+      throw errorCupos;
+    }
 
     res.status(201).json({
       mensaje: "Solicitud de cupo enviada correctamente.",
-      id_solicitud: resultado.insertId,
+      solicitud,
     });
   } catch (error) {
-    await conexion.rollback();
-    conexion.release();
-
     console.error("Error al solicitar cupo:", error);
 
     res.status(500).json({
@@ -634,41 +690,87 @@ app.post("/api/solicitudes", async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// CONSULTAR SOLICITUDES
+// CONSULTAR SOLICITUDES DE UN PASAJERO
 // ---------------------------------------------------------
 
-app.get("/api/solicitudes", async (req, res) => {
+app.get("/api/solicitudes/pasajero/:id", async (req, res) => {
   try {
-    const [solicitudes] = await pool.query(
-      `
-        SELECT
-          s.id_solicitud,
-          s.id_ruta,
-          s.id_pasajero,
-          s.estado,
-          r.origen,
-          r.destino,
-          r.fecha,
-          r.hora,
-          u.nombre AS nombre_pasajero,
-          u.apellido AS apellido_pasajero,
-          u.correo AS correo_pasajero,
-          u.telefono AS telefono_pasajero
-        FROM solicitudes s
-        INNER JOIN rutas r
-          ON s.id_ruta = r.id_ruta
-        INNER JOIN usuarios u
-          ON s.id_pasajero = u.id_usuario
-        ORDER BY s.id_solicitud DESC
-      `
-    );
+    const pasajeroId = req.params.id;
 
-    res.json(solicitudes);
+    const { data, error } = await db
+      .from("solicitudes_viaje")
+      .select(`
+        id,
+        viaje_id,
+        pasajero_id,
+        punto_encuentro,
+        estado,
+        fecha_solicitud,
+        rutas:viaje_id (
+          id,
+          origen,
+          destino,
+          fecha_hora_salida,
+          cupos_disponibles,
+          tarifa_contribucion,
+          conductor_id,
+          profiles:conductor_id (
+            nombre_completo,
+            telefono
+          )
+        )
+      `)
+      .eq("pasajero_id", pasajeroId)
+      .order("fecha_solicitud", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
   } catch (error) {
     console.error("Error al consultar solicitudes:", error);
 
     res.status(500).json({
       mensaje: "No fue posible consultar las solicitudes.",
+    });
+  }
+});
+
+// ---------------------------------------------------------
+// CONSULTAR RUTAS DE UN CONDUCTOR
+// ---------------------------------------------------------
+
+app.get("/api/rutas/conductor/:id", async (req, res) => {
+  try {
+    const conductorId = req.params.id;
+
+    const { data, error } = await db
+      .from("rutas")
+      .select(`
+        id,
+        origen,
+        destino,
+        fecha_hora_salida,
+        cupos_totales,
+        cupos_disponibles,
+        tarifa_contribucion,
+        estado,
+        creado_en
+      `)
+      .eq("conductor_id", conductorId)
+      .order("fecha_hora_salida", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error("Error al consultar rutas del conductor:", error);
+
+    res.status(500).json({
+      mensaje: "No fue posible consultar las rutas del conductor.",
     });
   }
 });

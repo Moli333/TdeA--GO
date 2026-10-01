@@ -23,9 +23,9 @@ app.post('/api/usuarios', async (req, res) => {
     });
   }
 
-  if (!correo.toLowerCase().endsWith('@tda.edu.co')) {
+  if (!correo.toLowerCase().endsWith('@correo.tdea.edu.co') && !correo.toLowerCase().endsWith('@tdea.edu.co')) {
     return res.status(400).json({
-      mensaje: 'Debes utilizar tu correo institucional del TdeA (@tda.edu.co).',
+      mensaje: 'Debes utilizar tu correo institucional del TdeA (@correo.tdea.edu.co o @tdea.edu.co).',
     });
   }
 

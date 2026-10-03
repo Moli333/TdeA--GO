@@ -19,7 +19,8 @@ import MisSolicitudes from "./paginas/MisSolicitudes";
 import MisRutas from "./paginas/MisRutas";
 
 // Puerto del backend
-const API_URL = "http://localhost:5000";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 function Aplicacion() {
   const [usuario, setUsuario] = useState(null);

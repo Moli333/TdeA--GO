@@ -1,0 +1,523 @@
+/* =========================================================
+   TdeA GO
+   MIS SOLICITUDES
+   ========================================================= */
+
+.solicitudes-pagina {
+  min-height: 70vh;
+  padding: 55px 0 80px;
+}
+
+/* =========================================================
+   ENCABEZADO
+   ========================================================= */
+
+.encabezado-servicio {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 38px;
+}
+
+.encabezado-servicio h1 {
+  margin: 12px 0 10px;
+  color: var(--azul-oscuro);
+  font-size: 38px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.encabezado-servicio p {
+  margin: 0;
+  max-width: 650px;
+  color: var(--gris-texto);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   BOTÓN ACTUALIZAR
+   ========================================================= */
+
+.boton-recargar-solicitudes {
+  min-width: 125px;
+  padding: 12px 18px;
+  border: 1px solid var(--azul);
+  border-radius: 9px;
+  background: white;
+  color: var(--azul);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.boton-recargar-solicitudes:hover:not(:disabled) {
+  background: var(--azul);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.boton-recargar-solicitudes:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   CARGANDO
+   ========================================================= */
+
+.estado-carga-solicitudes {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(7, 59, 104, 0.06);
+}
+
+.indicador-carga {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 15px;
+  border: 3px solid #dce9ef;
+  border-top-color: var(--azul);
+  border-radius: 50%;
+  animation: girar-carga 0.8s linear infinite;
+}
+
+.estado-carga-solicitudes p {
+  margin: 0;
+  color: var(--gris-texto);
+  font-size: 15px;
+}
+
+@keyframes girar-carga {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.mensaje-error-solicitudes {
+  padding: 25px;
+  border: 1px solid #f0caca;
+  border-radius: 14px;
+  background: #fff7f7;
+}
+
+.mensaje-error-solicitudes strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #a52d2d;
+  font-size: 16px;
+}
+
+.mensaje-error-solicitudes p {
+  margin: 0 0 18px;
+  color: #6d4a4a;
+  line-height: 1.5;
+}
+
+.boton-reintentar-solicitudes {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--azul);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.boton-reintentar-solicitudes:hover {
+  background: var(--azul-oscuro);
+}
+
+/* =========================================================
+   SIN SOLICITUDES
+   ========================================================= */
+
+.sin-solicitudes {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 25px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 18px;
+  background: white;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(7, 59, 104, 0.05);
+}
+
+.icono-sin-solicitudes {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: #e8f7f3;
+  color: var(--verde);
+  font-size: 27px;
+  font-weight: 800;
+}
+
+.sin-solicitudes h2 {
+  margin: 0 0 10px;
+  color: var(--azul-oscuro);
+  font-size: 23px;
+}
+
+.sin-solicitudes p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--gris-texto);
+  line-height: 1.6;
+}
+
+/* =========================================================
+   LISTA
+   ========================================================= */
+
+.lista-solicitudes {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* =========================================================
+   TARJETA
+   ========================================================= */
+
+.tarjeta-solicitud {
+  overflow: hidden;
+  border: 1px solid var(--gris-borde);
+  border-radius: 17px;
+  background: white;
+  box-shadow: 0 8px 26px rgba(7, 59, 104, 0.07);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.tarjeta-solicitud:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(7, 59, 104, 0.1);
+}
+
+/* =========================================================
+   CABECERA TARJETA
+   ========================================================= */
+
+.cabecera-tarjeta-solicitud {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 26px;
+  border-bottom: 1px solid var(--gris-borde);
+}
+
+.numero-solicitud {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--verde);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cabecera-tarjeta-solicitud h2 {
+  margin: 0;
+  color: var(--azul-oscuro);
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.separador-ruta {
+  display: inline-block;
+  margin: 0 10px;
+  color: var(--verde);
+}
+
+/* =========================================================
+   ESTADOS
+   ========================================================= */
+
+.estado-solicitud {
+  flex-shrink: 0;
+  padding: 8px 13px;
+  border-radius: 20px;
+  background: #eef2f4;
+  color: #5b6870;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.estado-solicitud.pendiente {
+  background: #fff5dc;
+  color: #946700;
+}
+
+.estado-solicitud.aceptada {
+  background: #e5f7ef;
+  color: #13704e;
+}
+
+.estado-solicitud.rechazada {
+  background: #fdeaea;
+  color: #a52d2d;
+}
+
+.estado-solicitud.cancelada {
+  background: #eef0f2;
+  color: #626b72;
+}
+
+/* =========================================================
+   INFORMACIÓN DEL VIAJE
+   ========================================================= */
+
+.informacion-solicitud {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 24px 26px;
+  background: #fbfcfd;
+}
+
+.dato-solicitud {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.icono-dato {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 45px;
+  height: 42px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #eaf3f8;
+  color: var(--azul);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dato-solicitud small,
+.telefono-conductor-solicitud small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--gris-texto);
+  font-size: 12px;
+}
+
+.dato-solicitud strong {
+  display: block;
+  color: var(--azul-oscuro);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   CONDUCTOR
+   ========================================================= */
+
+.conductor-solicitud {
+  padding: 24px 26px;
+  border-top: 1px solid var(--gris-borde);
+}
+
+.titulo-seccion-solicitud {
+  margin-bottom: 15px;
+  color: var(--azul-oscuro);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.datos-conductor-solicitud {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar-conductor-solicitud {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e8f1f6;
+  color: var(--azul);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.avatar-conductor-solicitud img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.nombre-conductor-solicitud {
+  flex: 1;
+  min-width: 0;
+}
+
+.nombre-conductor-solicitud strong {
+  display: block;
+  color: var(--azul-oscuro);
+  font-size: 15px;
+}
+
+.conductor-verificado {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--verde);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.telefono-conductor-solicitud {
+  text-align: right;
+}
+
+.telefono-conductor-solicitud strong {
+  color: var(--azul-oscuro);
+  font-size: 14px;
+}
+
+/* =========================================================
+   CUPOS
+   ========================================================= */
+
+.detalle-cupos-solicitud {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 15px;
+  padding: 19px 26px;
+  border-top: 1px solid var(--gris-borde);
+}
+
+.detalle-cupos-solicitud > div {
+  padding-right: 15px;
+  border-right: 1px solid var(--gris-borde);
+}
+
+.detalle-cupos-solicitud > div:last-child {
+  border-right: none;
+}
+
+.detalle-cupos-solicitud small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--gris-texto);
+  font-size: 12px;
+}
+
+.detalle-cupos-solicitud strong {
+  color: var(--azul-oscuro);
+  font-size: 14px;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 800px) {
+
+  .solicitudes-pagina {
+    padding: 40px 0 60px;
+  }
+
+  .encabezado-servicio {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .encabezado-servicio h1 {
+    font-size: 32px;
+  }
+
+  .boton-recargar-solicitudes {
+    width: 100%;
+  }
+
+  .informacion-solicitud {
+    grid-template-columns: 1fr;
+  }
+
+  .detalle-cupos-solicitud {
+    grid-template-columns: 1fr;
+  }
+
+  .detalle-cupos-solicitud > div {
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--gris-borde);
+  }
+
+  .detalle-cupos-solicitud > div:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+}
+
+@media (max-width: 600px) {
+
+  .cabecera-tarjeta-solicitud {
+    flex-direction: column;
+  }
+
+  .cabecera-tarjeta-solicitud h2 {
+    font-size: 19px;
+  }
+
+  .conductor-solicitud,
+  .informacion-solicitud,
+  .detalle-cupos-solicitud {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .cabecera-tarjeta-solicitud {
+    padding: 20px;
+  }
+
+  .datos-conductor-solicitud {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .telefono-conductor-solicitud {
+    width: 100%;
+    margin-left: 66px;
+    text-align: left;
+  }
+
+}

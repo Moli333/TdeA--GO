@@ -122,7 +122,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="foto-comunidad">
 
                 <img
-                  src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=800&q=85"
+                  src="https://media.istockphoto.com/id/1323167372/es/foto/hombre-indio-usando-computadora-port%C3%A1til-tel%C3%A9fono-m%C3%B3vil-trabajando-proyecto-freelance-en-l%C3%ADnea.jpg?s=612x612&w=0&k=20&c=MlBPvioXSGLBsCMSW4hc7o-dDn9H0I2xfxyFYu-fsBI="
                   alt="Estudiantes universitarios buscando opciones de transporte"
                 />
 
@@ -131,7 +131,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="contenido-tarjeta">
 
                 <span className="numero-tarjeta">
-                  01
+                  
                 </span>
 
                 <h3>
@@ -161,7 +161,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="foto-comunidad">
 
                 <img
-                  src="https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=800&q=85"
+                  src="https://www.elcarrocolombiano.com/wp-content/webp-express/webp-images/uploads/2025/12/20251221-20-CARROS-HIBRIDOS-Y-ELECTRICOS-MAS-VENDIDOS-DE-COLOMBIA-NOVIEMBRE-2025-01-1.jpg.webp"
                   alt="Personas preparándose para realizar un desplazamiento compartido"
                 />
 
@@ -170,7 +170,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="contenido-tarjeta">
 
                 <span className="numero-tarjeta">
-                  02
+                  
                 </span>
 
                 <h3>
@@ -206,7 +206,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="foto-comunidad">
 
                 <img
-                  src="https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=800&q=85"
+                  src="https://media.istockphoto.com/id/1179125140/es/foto/hombre-sacudiendo-hanks-con-amigos-sentados-en-el-coche.jpg?s=612x612&w=0&k=20&c=ViXAUc6MiSp-UMFpAuDRr2CoQSvAvPzhVIndK0jNu-g="
                   alt="Personas desplazándose juntas hacia su destino"
                 />
 
@@ -215,7 +215,7 @@ function Inicio({ usuario, irAlServicio, abrirLogin }) {
               <div className="contenido-tarjeta">
 
                 <span className="numero-tarjeta">
-                  03
+                  
                 </span>
 
                 <h3>

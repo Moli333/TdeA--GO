@@ -483,6 +483,7 @@ img {
   z-index: 2;
   width: 390px;
   height: 440px;
+  transform: translateY(40px);
   overflow: hidden;
   border-radius:
     210px
@@ -2137,7 +2138,7 @@ img {
 
   .hero-contenido {
     grid-template-columns: 1fr;
-    padding-top: 25px;
+    padding-top: 50px;
     gap: 20px;
   }
 
@@ -2150,11 +2151,13 @@ img {
 
   .hero-visual {
     min-height: 400px;
+    transform: translateY(30px);
   }
 
   .hero-foto-principal {
     width: 300px;
     height: 340px;
+    transform: translateY(100px);
   }
 
   .hero-circulo {
@@ -2434,4 +2437,504 @@ img {
   .register-form .login-field {
     margin-bottom: 15px;
   }
+}
+/* =========================================================
+   PUBLICAR RUTA - UBICACIÓN
+   ========================================================= */
+
+.acciones-ubicacion {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.ubicacion-confirmada {
+  display: block;
+  margin-top: 8px;
+  color: var(--verde);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.mapa-ruta {
+  margin-top: 24px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(7, 59, 104, 0.08);
+}
+
+.encabezado-mapa {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--gris-borde);
+}
+
+.encabezado-mapa h2 {
+  margin: 0 0 6px;
+  color: var(--azul-oscuro);
+  font-size: 20px;
+}
+
+.encabezado-mapa p {
+  margin: 0;
+  color: #687782;
+  font-size: 14px;
+}
+
+.mapa {
+  width: 100%;
+  height: 430px;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+@media (max-width: 700px) {
+  .encabezado-mapa {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mapa {
+    height: 350px;
+  }
+
+  .acciones-ubicacion {
+    flex-direction: column;
+  }
+
+  .acciones-ubicacion button {
+    width: 100%;
+  }
+}
+/* =========================================================
+   MENÚ DE USUARIO - TdeA GO
+   ========================================================= */
+
+.contenedor-usuario {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------
+   BOTÓN DEL USUARIO
+   --------------------------------------------------------- */
+
+.usuario-activo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 5px 10px 5px 6px;
+
+  border: 1px solid transparent;
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--azul-oscuro);
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.usuario-activo:hover {
+  background: #f4f8fb;
+  border-color: #dce8ef;
+}
+
+.usuario-activo:focus-visible {
+  outline: 3px solid rgba(11, 95, 145, 0.15);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------
+   CÍRCULO DEL USUARIO
+   --------------------------------------------------------- */
+
+.usuario-icono {
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: linear-gradient(
+    135deg,
+    var(--azul),
+    var(--verde)
+  );
+
+  color: white;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------
+   NOMBRE
+   --------------------------------------------------------- */
+
+.usuario-nombre {
+  max-width: 145px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  color: var(--azul-oscuro);
+}
+
+/* ---------------------------------------------------------
+   FLECHA
+   --------------------------------------------------------- */
+
+.usuario-flecha {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+
+  color: #718394;
+
+  font-size: 9px;
+
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.usuario-activo:hover .usuario-flecha {
+  color: var(--azul);
+}
+
+
+/* =========================================================
+   DROPDOWN
+   ========================================================= */
+
+.menu-usuario {
+  position: absolute;
+
+  top: calc(100% + 10px);
+  right: 0;
+
+  width: 285px;
+
+  padding: 8px;
+
+  background: #ffffff;
+
+  border: 1px solid #e3ebf0;
+  border-radius: 15px;
+
+  box-shadow:
+    0 14px 35px rgba(7, 59, 104, 0.13),
+    0 4px 10px rgba(7, 59, 104, 0.06);
+
+  z-index: 1000;
+
+  animation: aparecerMenuUsuario 0.18s ease-out;
+}
+
+/* Pequeño indicador superior */
+
+.menu-usuario::before {
+  content: "";
+
+  position: absolute;
+
+  top: -6px;
+  right: 25px;
+
+  width: 11px;
+  height: 11px;
+
+  background: #ffffff;
+
+  border-left: 1px solid #e3ebf0;
+  border-top: 1px solid #e3ebf0;
+
+  transform: rotate(45deg);
+}
+
+/* ---------------------------------------------------------
+   ANIMACIÓN
+   --------------------------------------------------------- */
+
+@keyframes aparecerMenuUsuario {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* =========================================================
+   CABECERA DEL MENÚ
+   ========================================================= */
+
+.menu-usuario-cabecera {
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+
+  padding: 13px 13px 12px;
+
+  margin-bottom: 5px;
+}
+
+.menu-usuario-cabecera strong {
+  color: var(--azul-oscuro);
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rol-actual {
+  display: inline-flex;
+  align-items: center;
+
+  width: fit-content;
+
+  padding: 4px 9px;
+
+  margin-top: 2px;
+
+  border-radius: 20px;
+
+  background: #edf7f5;
+  color: var(--verde);
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   OPCIONES
+   ========================================================= */
+
+.opcion-menu-usuario {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  min-height: 45px;
+
+  padding: 9px 11px;
+
+  border: none;
+  border-radius: 10px;
+
+  background: transparent;
+
+  color: #334b5f;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.opcion-menu-usuario:hover {
+  background: #f3f8fb;
+  color: var(--azul-oscuro);
+}
+
+.opcion-menu-usuario:active {
+  transform: scale(0.985);
+}
+
+
+/* =========================================================
+   OPCIÓN CAMBIO DE ROL
+   ========================================================= */
+
+.opcion-cambio-rol {
+  align-items: center;
+
+  background: #f7fafb;
+
+  border: 1px solid #e8f0f3;
+
+  margin-top: 3px;
+}
+
+.opcion-cambio-rol:hover {
+  background: #eef7f6;
+
+  border-color: #d7ebe8;
+
+  color: var(--azul-oscuro);
+}
+
+
+/* ---------------------------------------------------------
+   INDICADOR DEL CAMBIO DE ROL
+   --------------------------------------------------------- */
+
+.icono-opcion {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 9px;
+
+  background: #e8f3f7;
+
+  color: var(--azul);
+
+  font-size: 12px;
+  font-weight: 800;
+
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.opcion-cambio-rol:hover .icono-opcion {
+  background: var(--azul);
+  color: #ffffff;
+}
+
+
+/* ---------------------------------------------------------
+   TEXTO DEL CAMBIO DE ROL
+   --------------------------------------------------------- */
+
+.opcion-cambio-rol > span:last-child {
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.opcion-cambio-rol strong {
+  color: var(--azul-oscuro);
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.opcion-cambio-rol small {
+  color: #718394;
+
+  font-size: 11px;
+  font-weight: 400;
+
+  line-height: 1.3;
+}
+
+
+/* =========================================================
+   SEPARADOR
+   ========================================================= */
+
+.separador-menu {
+  height: 1px;
+
+  margin: 7px 5px;
+
+  background: #e9eef2;
+}
+
+
+/* =========================================================
+   CERRAR SESIÓN
+   ========================================================= */
+
+.opcion-cerrar-sesion {
+  color: #657887;
+}
+
+.opcion-cerrar-sesion:hover {
+  background: #fdf3f3;
+  color: #a94444;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .usuario-nombre {
+    display: none;
+  }
+
+  .usuario-activo {
+    padding-right: 6px;
+  }
+
+  .menu-usuario {
+    right: -5px;
+    width: 270px;
+  }
+
+}
+
+
+@media (max-width: 480px) {
+
+  .menu-usuario {
+    position: fixed;
+
+    top: 72px;
+    right: 12px;
+    left: 12px;
+
+    width: auto;
+
+    border-radius: 14px;
+  }
+
+  .menu-usuario::before {
+    display: none;
+  }
+
 }

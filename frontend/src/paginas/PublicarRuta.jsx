@@ -10,39 +10,30 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "./PublicarRuta.css";
 
 const UBICACION_INICIAL = [6.2442, -75.5812];
 
 const iconoOrigen = L.divIcon({
-  className: "",
+  className: "marcador-personalizado",
   html: `
-    <div style="
-      width: 18px;
-      height: 18px;
-      background: #0b5f91;
-      border: 3px solid white;
-      border-radius: 50%;
-      box-shadow: 0 2px 8px rgba(0,0,0,.35);
-    "></div>
+    <div class="marcador-origen">
+      <span></span>
+    </div>
   `,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
 });
 
 const iconoDestino = L.divIcon({
-  className: "",
+  className: "marcador-personalizado",
   html: `
-    <div style="
-      width: 18px;
-      height: 18px;
-      background: #0a9a8f;
-      border: 3px solid white;
-      border-radius: 50%;
-      box-shadow: 0 2px 8px rgba(0,0,0,.35);
-    "></div>
+    <div class="marcador-destino">
+      <span></span>
+    </div>
   `,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
 });
 
 function AjustarMapa({ origen, destino }) {
@@ -56,7 +47,7 @@ function AjustarMapa({ origen, destino }) {
           [destino.lat, destino.lng],
         ],
         {
-          padding: [50, 50],
+          padding: [60, 60],
         }
       );
     } else if (origen) {
@@ -415,212 +406,400 @@ function PublicarRuta({ usuario, API_URL }) {
   };
 
   return (
-    <section className="pagina-servicio">
-      <div className="contenedor">
-        <span className="etiqueta-verde">
-          CONDUCTOR
-        </span>
+    <section className="pagina-publicar-ruta">
 
-        <h1>Publicar una ruta</h1>
+      <div className="contenedor publicar-contenedor">
 
-        <p>
-          Registra tu recorrido para que otros
-          integrantes de la comunidad TdeA puedan
-          consultar los cupos disponibles.
-        </p>
+        {/* =================================================
+            ENCABEZADO DE LA PÁGINA
+            ================================================= */}
 
-        <form
-          className="formulario-ruta"
-          onSubmit={publicarRuta}
-        >
-          <div className="campos-ruta">
-            <div className="campo-formulario">
-              <label htmlFor="origen">
-                Origen
-              </label>
+        <div className="cabecera-publicar">
 
-              <div className="campo-con-accion">
-                <input
-                  id="origen"
-                  type="text"
-                  value={origen}
-                  onChange={(evento) =>
-                    setOrigen(
-                      evento.target.value
-                    )
-                  }
-                  placeholder="Ej. Bello, Antioquia"
-                />
+          <div className="cabecera-publicar-texto">
 
-                <button
-                  type="button"
-                  className="boton-secundario"
-                  onClick={buscarOrigen}
-                  disabled={cargandoOrigen}
-                >
-                  {cargandoOrigen
-                    ? "Buscando..."
-                    : "Ubicar"}
-                </button>
-              </div>
+            <span className="etiqueta-conductor">
+              CONDUCTOR
+            </span>
 
-              <div className="acciones-ubicacion">
-                <button
-                  type="button"
-                  className="boton-ubicacion"
-                  onClick={usarUbicacionActual}
-                  disabled={cargandoOrigen}
-                >
-                  Usar mi ubicación actual
-                </button>
+            <h1>
+              Publica tu ruta
+            </h1>
 
-                <button
-                  type="button"
-                  className="boton-ubicacion"
-                  onClick={() =>
-                    activarSeleccion(
-                      "origen"
-                    )
-                  }
-                >
-                  Seleccionar en mapa
-                </button>
-              </div>
+            <p>
+              Comparte tu recorrido con la
+              comunidad TdeA y permite que otros
+              estudiantes consulten los cupos
+              disponibles.
+            </p>
 
-              {ubicacionOrigen && (
-                <small className="ubicacion-confirmada">
-                  ✓ Origen ubicado
-                </small>
-              )}
-            </div>
-
-            <div className="campo-formulario">
-              <label htmlFor="destino">
-                Destino
-              </label>
-
-              <div className="campo-con-accion">
-                <input
-                  id="destino"
-                  type="text"
-                  value={destino}
-                  onChange={(evento) =>
-                    setDestino(
-                      evento.target.value
-                    )
-                  }
-                  placeholder="Ej. Tecnológico de Antioquia"
-                />
-
-                <button
-                  type="button"
-                  className="boton-secundario"
-                  onClick={buscarDestino}
-                  disabled={cargandoDestino}
-                >
-                  {cargandoDestino
-                    ? "Buscando..."
-                    : "Ubicar"}
-                </button>
-              </div>
-
-              <div className="acciones-ubicacion">
-                <button
-                  type="button"
-                  className="boton-ubicacion"
-                  onClick={() =>
-                    activarSeleccion(
-                      "destino"
-                    )
-                  }
-                >
-                  Seleccionar en mapa
-                </button>
-              </div>
-
-              {ubicacionDestino && (
-                <small className="ubicacion-confirmada">
-                  ✓ Destino ubicado
-                </small>
-              )}
-            </div>
-
-            <div className="campo-formulario">
-              <label htmlFor="fecha">
-                Fecha de salida
-              </label>
-
-              <input
-                id="fecha"
-                type="date"
-                value={fecha}
-                onChange={(evento) =>
-                  setFecha(
-                    evento.target.value
-                  )
-                }
-              />
-            </div>
-
-            <div className="campo-formulario">
-              <label htmlFor="hora">
-                Hora de salida
-              </label>
-
-              <input
-                id="hora"
-                type="time"
-                value={hora}
-                onChange={(evento) =>
-                  setHora(
-                    evento.target.value
-                  )
-                }
-              />
-            </div>
-
-            <div className="campo-formulario">
-              <label htmlFor="cupos">
-                Cupos disponibles
-              </label>
-
-              <input
-                id="cupos"
-                type="number"
-                min="1"
-                value={cupos}
-                onChange={(evento) =>
-                  setCupos(
-                    evento.target.value
-                  )
-                }
-                placeholder="Ej. 3"
-              />
-            </div>
           </div>
 
-          <div className="mapa-ruta">
-            <div className="encabezado-mapa">
+          <div className="indicador-publicar">
+
+            <div className="indicador-icono">
+              +
+            </div>
+
+            <div>
+              <strong>
+                Nueva ruta
+              </strong>
+
+              <span>
+                Completa la información del recorrido
+              </span>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* =================================================
+            FORMULARIO
+            ================================================= */}
+
+        <form
+          className="formulario-publicar"
+          onSubmit={publicarRuta}
+        >
+
+          {/* =================================================
+              SECCIÓN DEL RECORRIDO
+              ================================================= */}
+
+          <section className="tarjeta-publicar">
+
+            <div className="titulo-seccion-publicar">
+
+              <div className="numero-seccion">
+                1
+              </div>
+
               <div>
                 <h2>
-                  Ubicación del recorrido
+                  Define tu recorrido
                 </h2>
 
                 <p>
-                  {modoSeleccion ===
-                  "origen"
-                    ? "Haz clic en el mapa para seleccionar el origen."
-                    : modoSeleccion ===
-                      "destino"
-                    ? "Haz clic en el mapa para seleccionar el destino."
-                    : "Puedes buscar una ubicación o seleccionarla directamente en el mapa."}
+                  Indica desde dónde sales y hacia
+                  dónde te diriges.
                 </p>
+              </div>
+
+            </div>
+
+            <div className="ruta-puntos">
+
+              {/* ORIGEN */}
+
+              <div className="bloque-ubicacion bloque-origen">
+
+                <div className="indicador-ubicacion">
+                  <span></span>
+                </div>
+
+                <div className="contenido-ubicacion">
+
+                  <label htmlFor="origen">
+                    Punto de origen
+                  </label>
+
+                  <div className="campo-ubicacion">
+
+                    <input
+                      id="origen"
+                      type="text"
+                      value={origen}
+                      onChange={(evento) => {
+                        setOrigen(
+                          evento.target.value
+                        );
+                        setUbicacionOrigen(null);
+                      }}
+                      placeholder="Ej. Bello, Antioquia"
+                    />
+
+                    <button
+                      type="button"
+                      className="boton-ubicar"
+                      onClick={buscarOrigen}
+                      disabled={cargandoOrigen}
+                    >
+                      {cargandoOrigen
+                        ? "Buscando..."
+                        : "Ubicar"}
+                    </button>
+
+                  </div>
+
+                  <div className="acciones-ubicacion-nuevas">
+
+                    <button
+                      type="button"
+                      className="boton-accion-ubicacion"
+                      onClick={
+                        usarUbicacionActual
+                      }
+                      disabled={
+                        cargandoOrigen
+                      }
+                    >
+                      <span>
+                        ◎
+                      </span>
+
+                      Usar mi ubicación
+                    </button>
+
+                    <button
+                      type="button"
+                      className="boton-accion-ubicacion"
+                      onClick={() =>
+                        activarSeleccion(
+                          "origen"
+                        )
+                      }
+                    >
+                      <span>
+                        ◉
+                      </span>
+
+                      Elegir en mapa
+                    </button>
+
+                  </div>
+
+                  {ubicacionOrigen && (
+                    <div className="ubicacion-confirmada-nueva">
+                      <span>✓</span>
+                      Origen ubicado correctamente
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+
+              {/* LÍNEA DE RECORRIDO */}
+
+              <div className="linea-recorrido-formulario">
+                <span></span>
+              </div>
+
+              {/* DESTINO */}
+
+              <div className="bloque-ubicacion bloque-destino">
+
+                <div className="indicador-ubicacion destino">
+                  <span></span>
+                </div>
+
+                <div className="contenido-ubicacion">
+
+                  <label htmlFor="destino">
+                    Punto de destino
+                  </label>
+
+                  <div className="campo-ubicacion">
+
+                    <input
+                      id="destino"
+                      type="text"
+                      value={destino}
+                      onChange={(evento) => {
+                        setDestino(
+                          evento.target.value
+                        );
+                        setUbicacionDestino(null);
+                      }}
+                      placeholder="Ej. Tecnológico de Antioquia"
+                    />
+
+                    <button
+                      type="button"
+                      className="boton-ubicar"
+                      onClick={buscarDestino}
+                      disabled={cargandoDestino}
+                    >
+                      {cargandoDestino
+                        ? "Buscando..."
+                        : "Ubicar"}
+                    </button>
+
+                  </div>
+
+                  <div className="acciones-ubicacion-nuevas">
+
+                    <button
+                      type="button"
+                      className="boton-accion-ubicacion"
+                      onClick={() =>
+                        activarSeleccion(
+                          "destino"
+                        )
+                      }
+                    >
+                      <span>
+                        ◉
+                      </span>
+
+                      Elegir en mapa
+                    </button>
+
+                  </div>
+
+                  {ubicacionDestino && (
+                    <div className="ubicacion-confirmada-nueva">
+                      <span>✓</span>
+                      Destino ubicado correctamente
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          {/* =================================================
+              FECHA, HORA Y CUPOS
+              ================================================= */}
+
+          <section className="tarjeta-publicar">
+
+            <div className="titulo-seccion-publicar">
+
+              <div className="numero-seccion">
+                2
+              </div>
+
+              <div>
+                <h2>
+                  Información del viaje
+                </h2>
+
+                <p>
+                  Define cuándo realizarás el
+                  recorrido y cuántos pasajeros puedes
+                  llevar.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="datos-viaje">
+
+              <div className="campo-publicar">
+
+                <label htmlFor="fecha">
+                  Fecha de salida
+                </label>
+
+                <input
+                  id="fecha"
+                  type="date"
+                  value={fecha}
+                  min={
+                    new Date()
+                      .toISOString()
+                      .split("T")[0]
+                  }
+                  onChange={(evento) =>
+                    setFecha(
+                      evento.target.value
+                    )
+                  }
+                />
+
+              </div>
+
+              <div className="campo-publicar">
+
+                <label htmlFor="hora">
+                  Hora de salida
+                </label>
+
+                <input
+                  id="hora"
+                  type="time"
+                  value={hora}
+                  onChange={(evento) =>
+                    setHora(
+                      evento.target.value
+                    )
+                  }
+                />
+
+              </div>
+
+              <div className="campo-publicar">
+
+                <label htmlFor="cupos">
+                  Cupos disponibles
+                </label>
+
+                <div className="campo-cupos">
+
+                  <input
+                    id="cupos"
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={cupos}
+                    onChange={(evento) =>
+                      setCupos(
+                        evento.target.value
+                      )
+                    }
+                    placeholder="Ej. 3"
+                  />
+
+                  <span>
+                    pasajeros
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          {/* =================================================
+              MAPA
+              ================================================= */}
+
+          <section className="tarjeta-publicar tarjeta-mapa-publicar">
+
+            <div className="encabezado-mapa-nuevo">
+
+              <div className="titulo-seccion-publicar">
+
+                <div className="numero-seccion">
+                  3
+                </div>
+
+                <div>
+                  <h2>
+                    Revisa el recorrido
+                  </h2>
+
+                  <p>
+                    Verifica en el mapa los puntos
+                    seleccionados.
+                  </p>
+                </div>
+
               </div>
 
               {modoSeleccion && (
                 <button
                   type="button"
-                  className="boton-secundario"
+                  className="boton-cancelar-mapa"
                   onClick={() =>
                     setModoSeleccion(null)
                   }
@@ -628,118 +807,190 @@ function PublicarRuta({ usuario, API_URL }) {
                   Cancelar selección
                 </button>
               )}
+
             </div>
 
-            <MapContainer
-              center={UBICACION_INICIAL}
-              zoom={12}
-              scrollWheelZoom={true}
-              className="mapa"
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+            <div className="aviso-mapa">
 
-              <AjustarMapa
-                origen={ubicacionOrigen}
-                destino={ubicacionDestino}
-              />
+              <span className="aviso-mapa-icono">
+                {modoSeleccion ? "!" : "i"}
+              </span>
 
-              <SeleccionMapa
-                modoSeleccion={modoSeleccion}
-                seleccionarUbicacion={
-                  seleccionarUbicacion
-                }
-              />
+              <span>
+                {modoSeleccion ===
+                "origen"
+                  ? "Haz clic en el mapa para seleccionar el punto de origen."
+                  : modoSeleccion ===
+                    "destino"
+                  ? "Haz clic en el mapa para seleccionar el punto de destino."
+                  : "Puedes seleccionar una ubicación directamente sobre el mapa."}
+              </span>
 
-              {ubicacionOrigen && (
-                <Marker
-                  position={[
-                    ubicacionOrigen.lat,
-                    ubicacionOrigen.lng,
-                  ]}
-                  icon={iconoOrigen}
-                >
-                  <Popup>
-                    <strong>
-                      Origen
-                    </strong>
-                    <br />
-                    {origen ||
-                      "Ubicación seleccionada"}
-                  </Popup>
-                </Marker>
-              )}
+            </div>
 
-              {ubicacionDestino && (
-                <Marker
-                  position={[
-                    ubicacionDestino.lat,
-                    ubicacionDestino.lng,
-                  ]}
-                  icon={iconoDestino}
-                >
-                  <Popup>
-                    <strong>
-                      Destino
-                    </strong>
-                    <br />
-                    {destino ||
-                      "Ubicación seleccionada"}
-                  </Popup>
-                </Marker>
-              )}
+            <div className="contenedor-mapa-publicar">
 
-              {ubicacionOrigen &&
-                ubicacionDestino && (
-                  <Polyline
-                    positions={[
-                      [
-                        ubicacionOrigen.lat,
-                        ubicacionOrigen.lng,
-                      ],
-                      [
-                        ubicacionDestino.lat,
-                        ubicacionDestino.lng,
-                      ],
+              <MapContainer
+                center={UBICACION_INICIAL}
+                zoom={12}
+                scrollWheelZoom={true}
+                className="mapa-publicar"
+              >
+
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                <AjustarMapa
+                  origen={ubicacionOrigen}
+                  destino={ubicacionDestino}
+                />
+
+                <SeleccionMapa
+                  modoSeleccion={modoSeleccion}
+                  seleccionarUbicacion={
+                    seleccionarUbicacion
+                  }
+                />
+
+                {ubicacionOrigen && (
+                  <Marker
+                    position={[
+                      ubicacionOrigen.lat,
+                      ubicacionOrigen.lng,
                     ]}
-                    pathOptions={{
-                      color: "#0b5f91",
-                      weight: 5,
-                      opacity: 0.75,
-                      dashArray: "10 8",
-                    }}
-                  />
+                    icon={iconoOrigen}
+                  >
+                    <Popup>
+                      <strong>
+                        Origen
+                      </strong>
+
+                      <br />
+
+                      {origen ||
+                        "Ubicación seleccionada"}
+                    </Popup>
+                  </Marker>
                 )}
-            </MapContainer>
-          </div>
+
+                {ubicacionDestino && (
+                  <Marker
+                    position={[
+                      ubicacionDestino.lat,
+                      ubicacionDestino.lng,
+                    ]}
+                    icon={iconoDestino}
+                  >
+                    <Popup>
+                      <strong>
+                        Destino
+                      </strong>
+
+                      <br />
+
+                      {destino ||
+                        "Ubicación seleccionada"}
+                    </Popup>
+                  </Marker>
+                )}
+
+                {ubicacionOrigen &&
+                  ubicacionDestino && (
+                    <Polyline
+                      positions={[
+                        [
+                          ubicacionOrigen.lat,
+                          ubicacionOrigen.lng,
+                        ],
+                        [
+                          ubicacionDestino.lat,
+                          ubicacionDestino.lng,
+                        ],
+                      ]}
+                      pathOptions={{
+                        color: "#0b5f91",
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: "10 8",
+                      }}
+                    />
+                  )}
+
+              </MapContainer>
+
+              <div className="leyenda-mapa">
+
+                <div>
+                  <span className="punto-leyenda origen"></span>
+                  Origen
+                </div>
+
+                <div>
+                  <span className="punto-leyenda destino"></span>
+                  Destino
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          {/* =================================================
+              MENSAJES
+              ================================================= */}
 
           {error && (
-            <p className="mensaje-formulario mensaje-error">
-              {error}
-            </p>
+            <div className="mensaje-publicar mensaje-publicar-error">
+              <span>!</span>
+              <p>{error}</p>
+            </div>
           )}
 
           {mensaje && (
-            <p className="mensaje-formulario mensaje-exito">
-              {mensaje}
-            </p>
+            <div className="mensaje-publicar mensaje-publicar-exito">
+              <span>✓</span>
+              <p>{mensaje}</p>
+            </div>
           )}
 
-          <div className="acciones-formulario">
+          {/* =================================================
+              BOTÓN FINAL
+              ================================================= */}
+
+          <div className="final-publicar">
+
+            <div className="texto-final-publicar">
+
+              <strong>
+                ¿Todo listo?
+              </strong>
+
+              <span>
+                Revisa la información antes de
+                publicar tu ruta.
+              </span>
+
+            </div>
+
             <button
               type="submit"
-              className="boton-principal"
+              className="boton-publicar-final"
               disabled={guardando}
             >
               {guardando
                 ? "Publicando..."
                 : "Publicar ruta"}
             </button>
+
           </div>
+
         </form>
+
       </div>
+
     </section>
   );
 }

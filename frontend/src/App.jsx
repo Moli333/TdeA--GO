@@ -26,6 +26,7 @@ function Aplicacion() {
   const [usuario, setUsuario] = useState(null);
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
+  const [mostrarMenuMovil, setMostrarMenuMovil] = useState(false);
 
   const navegar = useNavigate();
 
@@ -51,12 +52,6 @@ function Aplicacion() {
 
   // =========================================================
   // ACTUALIZAR USUARIO
-  // =========================================================
-  //
-  // Esta función mantiene todos los datos actuales del usuario
-  // y reemplaza únicamente los datos que lleguen actualizados.
-  //
-  // Es especialmente importante para foto_url.
   // =========================================================
 
   const actualizarUsuario = (datosActualizados) => {
@@ -106,6 +101,7 @@ function Aplicacion() {
 
     setMostrarLogin(false);
     setMostrarMenuUsuario(false);
+    setMostrarMenuMovil(false);
 
     navegar("/mis-solicitudes");
   };
@@ -119,18 +115,13 @@ function Aplicacion() {
 
     setUsuario(null);
     setMostrarMenuUsuario(false);
+    setMostrarMenuMovil(false);
 
     navegar("/");
   };
 
   // =========================================================
   // CAMBIAR ROL ACTIVO
-  // =========================================================
-  //
-  // Este cambio modifica el rol activo de la sesión.
-  // No modifica todavía el registro del usuario en la base de datos.
-  //
-  // La foto y los demás datos del usuario se conservan.
   // =========================================================
 
   const cambiarRol = (nuevoRol) => {
@@ -149,6 +140,7 @@ function Aplicacion() {
     );
 
     setMostrarMenuUsuario(false);
+    setMostrarMenuMovil(false);
 
     if (nuevoRol === "conductor") {
       navegar("/publicar");
@@ -162,11 +154,22 @@ function Aplicacion() {
   // =========================================================
 
   const irAlServicio = (ruta) => {
+    setMostrarMenuMovil(false);
+
     if (!usuario) {
       setMostrarLogin(true);
       return;
     }
 
+    navegar(ruta);
+  };
+
+  // =========================================================
+  // NAVEGACIÓN DESDE EL MENÚ MÓVIL
+  // =========================================================
+
+  const navegarMenuMovil = (ruta) => {
+    setMostrarMenuMovil(false);
     navegar(ruta);
   };
 
@@ -240,7 +243,9 @@ function Aplicacion() {
       <header className="encabezado">
         <div className="contenedor encabezado-contenido">
 
-          {/* MARCA */}
+          {/* =================================================
+              MARCA
+              ================================================= */}
 
           <Link to="/" className="marca-tdea">
             <span
@@ -259,7 +264,7 @@ function Aplicacion() {
           </Link>
 
           {/* =================================================
-              NAVEGACIÓN PRINCIPAL
+              NAVEGACIÓN PRINCIPAL - ESCRITORIO
               ================================================= */}
 
           <nav className="navegacion-principal">
@@ -337,6 +342,116 @@ function Aplicacion() {
             )}
 
           </nav>
+
+          {/* =================================================
+              MENÚ MÓVIL
+              ================================================= */}
+
+          <div className="menu-movil">
+
+            <button
+              className="boton-menu-movil"
+              onClick={() =>
+                setMostrarMenuMovil(
+                  !mostrarMenuMovil
+                )
+              }
+              aria-expanded={
+                mostrarMenuMovil
+              }
+              aria-label="Abrir menú de navegación"
+            >
+              <span className="icono-menu-movil">
+                {mostrarMenuMovil ? "×" : "☰"}
+              </span>
+
+              <span>
+                Menú
+              </span>
+            </button>
+
+            {mostrarMenuMovil && (
+              <div className="lista-menu-movil">
+
+                <button
+                  className="opcion-menu-movil"
+                  onClick={() =>
+                    navegarMenuMovil("/")
+                  }
+                >
+                  Inicio
+                </button>
+
+                <button
+                  className="opcion-menu-movil"
+                  onClick={() =>
+                    irAlServicio("/buscar")
+                  }
+                >
+                  Buscar ruta
+                </button>
+
+                {esConductor && (
+                  <>
+                    <button
+                      className="opcion-menu-movil"
+                      onClick={() =>
+                        irAlServicio("/publicar")
+                      }
+                    >
+                      Publicar ruta
+                    </button>
+
+                    <button
+                      className="opcion-menu-movil"
+                      onClick={() =>
+                        irAlServicio("/mis-rutas")
+                      }
+                    >
+                      Mis rutas
+                    </button>
+                  </>
+                )}
+
+                {esPasajero && (
+                  <button
+                    className="opcion-menu-movil"
+                    onClick={() =>
+                      irAlServicio("/mis-solicitudes")
+                    }
+                  >
+                    Mis solicitudes
+                  </button>
+                )}
+
+                {usuario && (
+                  <button
+                    className="opcion-menu-movil"
+                    onClick={() => {
+                      setMostrarMenuMovil(false);
+                      navegar("/mi-cuenta");
+                    }}
+                  >
+                    Mi cuenta
+                  </button>
+                )}
+
+                {!usuario && (
+                  <button
+                    className="opcion-menu-movil opcion-login-movil"
+                    onClick={() => {
+                      setMostrarMenuMovil(false);
+                      setMostrarLogin(true);
+                    }}
+                  >
+                    Iniciar sesión
+                  </button>
+                )}
+
+              </div>
+            )}
+
+          </div>
 
           {/* =================================================
               ACCIONES DEL ENCABEZADO

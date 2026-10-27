@@ -2,12 +2,14 @@ import "./MiCuenta.css";
 import { useEffect, useRef, useState } from "react";
 import RegistrarVehiculo from "./RegistrarVehiculo";
 
-const API_URL = "http://localhost:5000";
+const API_URL_PREDETERMINADA =
+  import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 function MiCuenta({
   usuario,
   cerrarSesion,
   actualizarUsuario,
+  API_URL = API_URL_PREDETERMINADA,
 }) {
   const [fotoSeleccionada, setFotoSeleccionada] = useState(null);
   const [vistaPrevia, setVistaPrevia] = useState(null);
@@ -29,6 +31,10 @@ function MiCuenta({
 
   const [errorFoto, setErrorFoto] =
     useState("");
+
+  const [mensajeRol, setMensajeRol] = useState("");
+  const [errorRol, setErrorRol] = useState("");
+  const [cambiandoRol, setCambiandoRol] = useState(false);
 
   const inputArchivoRef = useRef(null);
   const videoRef = useRef(null);
@@ -93,6 +99,58 @@ function MiCuenta({
       nombre.charAt(0).toUpperCase()
     )
     .join("");
+
+  const manejarVehiculoRegistrado = async () => {
+    setMensajeRol("");
+    setErrorRol("");
+
+    // Si ya es conductor, el registro/actualización del vehículo termina aquí.
+    if (esConductor) {
+      setMensajeRol("Tu vehículo quedó registrado o actualizado correctamente.");
+      return;
+    }
+
+    if (!idUsuario) {
+      setErrorRol("No pudimos identificar tu cuenta. Cierra sesión e inicia sesión nuevamente.");
+      return;
+    }
+
+    try {
+      setCambiandoRol(true);
+      setMensajeRol("Vehículo registrado. Estamos activando tu perfil de conductor...");
+
+      const respuesta = await fetch(`${API_URL}/api/usuarios/${idUsuario}/rol`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rol: "conductor" }),
+      });
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje || "El vehículo se registró, pero no pudimos activar el rol de conductor. Inténtalo nuevamente."
+        );
+      }
+
+      if (actualizarUsuario) {
+        actualizarUsuario({
+          ...usuario,
+          ...(datos.usuario || {}),
+          rol: "conductor",
+        });
+      }
+
+      setErrorRol("");
+      setMensajeRol("¡Listo! Tu vehículo quedó registrado y ahora tienes el rol de conductor.");
+    } catch (error) {
+      console.error("Error activando el rol de conductor:", error);
+      setMensajeRol("");
+      setErrorRol(error.message || "No pudimos activar el rol de conductor.");
+    } finally {
+      setCambiandoRol(false);
+    }
+  };
 
   /*
    * La vista previa tiene prioridad mientras
@@ -933,13 +991,43 @@ function MiCuenta({
         </div>
 
         {/* ==================================================
-            REGISTRO DE VEHÍCULO (Solo visible para conductores)
+            REGISTRO DE VEHÍCULO
+            Los pasajeros también pueden registrar su vehículo para
+            solicitar la activación del rol de conductor.
             ================================================== */}
-        {esConductor && (
-          <div style={{ margin: "30px 0" }}>
-            <RegistrarVehiculo usuarioId={idUsuario} />
+        <div style={{ margin: "30px 0" }}>
+          <div style={{ marginBottom: "16px" }}>
+            <h3 style={{ marginBottom: "8px" }}>
+              {esConductor ? "Mi vehículo" : "Registra tu vehículo para ser conductor"}
+            </h3>
+            <p style={{ margin: 0 }}>
+              {esConductor
+                ? "Puedes registrar o actualizar los datos del vehículo asociado a tu cuenta."
+                : "Para publicar rutas y ofrecer cupos, registra primero los datos de tu vehículo. Cuando se guarde correctamente, validaremos el registro y activaremos tu rol de conductor."}
+            </p>
           </div>
-        )}
+
+          <RegistrarVehiculo
+            usuarioId={idUsuario}
+            onVehiculoRegistrado={manejarVehiculoRegistrado}
+          />
+
+          {cambiandoRol && (
+            <p role="status" style={{ marginTop: "12px" }}>
+              Estamos verificando tu vehículo y actualizando tu rol...
+            </p>
+          )}
+          {mensajeRol && (
+            <p role="status" style={{ marginTop: "12px", color: "#18794e" }}>
+              {mensajeRol}
+            </p>
+          )}
+          {errorRol && (
+            <p role="alert" style={{ marginTop: "12px", color: "#b42318" }}>
+              {errorRol}
+            </p>
+          )}
+        </div>
 
         {/* ==================================================
             ACCIONES SEGÚN ROL
@@ -1104,8 +1192,7 @@ function MiCuenta({
                 </strong>
 
                 <p>
-                  Puedes cambiar entre pasajero y conductor
-                  desde el menú de tu perfil.
+                  Todas las cuentas comienzan como pasajero. Para activar el rol de conductor, registra primero un vehículo desde esta página.
                 </p>
 
               </div>

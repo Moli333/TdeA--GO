@@ -122,7 +122,7 @@ app.get("/", (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 2. REGISTRO DE USUARIO (Con validación y flujo de correo Supabase)
+// 2. REGISTRO DE USUARIO
 // POST /api/usuarios
 // ------------------------------------------------------------------
 
@@ -133,7 +133,6 @@ app.post("/api/usuarios", async (req, res) => {
     correo,
     telefono,
     contrasena,
-    rol,
   } = req.body;
 
   if (!nombre || !apellido || !correo || !telefono || !contrasena) {
@@ -155,9 +154,10 @@ app.post("/api/usuarios", async (req, res) => {
 
   try {
     const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`;
-    const rolUsuario = rol === "conductor" ? "conductor" : "pasajero";
 
-    // 1. Registrar en Supabase Auth (Esto dispara automáticamente el correo de confirmación)
+    // Todos los usuarios nuevos comienzan como pasajeros.
+    const rolUsuario = "pasajero";
+
     const { data: authData, error: authError } =
       await supabase.auth.signUp({
         email: correoNormalizado,
@@ -180,7 +180,6 @@ app.post("/api/usuarios", async (req, res) => {
     const userId = authData.user?.id;
 
     if (userId) {
-      // 2. Guardar en la tabla profiles con verificado: false (hasta que confirme su correo)
       const { error: perfilError } =
         await dbClient.from("profiles").upsert(
           [
@@ -190,7 +189,7 @@ app.post("/api/usuarios", async (req, res) => {
               correo: correoNormalizado,
               telefono: telefono.trim(),
               rol: rolUsuario,
-              verificado: false, // Se pondrá en true cuando confirme o al iniciar sesión si el sistema lo valida
+              verificado: false,
               foto_url: null,
               creado_en: new Date().toISOString(),
             },
@@ -271,7 +270,8 @@ app.post("/api/login", async (req, res) => {
           meta.nombre_completo || "Usuario TdeA",
         correo: user.email,
         telefono: meta.telefono || "",
-        rol: meta.rol || "pasajero",
+        // No usar los metadatos para asignar el rol de conductor.
+        rol: "pasajero",
         verificado: false,
         foto_url: null,
         creado_en: new Date().toISOString(),
@@ -360,6 +360,35 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
       });
     }
 
+    // Antes de asignar el rol de conductor, verificar que tenga vehículo.
+    if (rol === "conductor") {
+      const { data: vehiculo, error: errorVehiculo } =
+        await dbClient
+          .from("vehiculos")
+          .select("id")
+          .eq("usuario_id", id)
+          .limit(1)
+          .maybeSingle();
+
+      if (errorVehiculo) {
+        console.error(
+          "Error verificando el vehículo del usuario:",
+          errorVehiculo
+        );
+
+        return res.status(500).json({
+          mensaje: "No fue posible verificar el vehículo registrado. Inténtalo nuevamente.",
+        });
+      }
+
+      if (!vehiculo) {
+        return res.status(400).json({
+          mensaje: "Para ser conductor, primero debes registrar tu vehículo.",
+          requiereVehiculo: true,
+        });
+      }
+    }
+
     const { data, error } = await dbClient
       .from("profiles")
       .update({ rol })
@@ -371,7 +400,7 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
       throw error;
     }
 
-    res.json({
+    return res.json({
       mensaje: "Rol actualizado correctamente.",
       usuario: data,
     });
@@ -493,7 +522,7 @@ app.put(
 
       return res.status(200).json({
         mensaje:
-           "Foto de perfil actualizada correctamente.",
+          "Foto de perfil actualizada correctamente.",
         usuario: {
           ...data,
           foto_url: fotoUrl,
@@ -577,7 +606,6 @@ app.delete(
 // GET /api/rutas
 // ------------------------------------------------------------------
 
-
 app.get("/api/rutas", async (req, res) => {
   try {
     const { data, error } = await dbClient
@@ -649,7 +677,7 @@ app.get("/api/rutas", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 9. PUBLICAR RUTA (Versión blindada)
+// 9. PUBLICAR RUTA
 // POST /api/rutas
 // ------------------------------------------------------------------
 
@@ -691,7 +719,7 @@ app.post("/api/rutas", async (req, res) => {
     if (!fechaHoraSalida && fecha && hora) {
       fechaHoraSalida = `${fecha}T${hora}:00`;
     } else if (!fechaHoraSalida) {
-      fechaHoraSalida = new Date(Date.now() + 86400000).toISOString(); 
+      fechaHoraSalida = new Date(Date.now() + 86400000).toISOString();
     }
 
     const { data, error } = await dbClient
@@ -714,13 +742,13 @@ app.post("/api/rutas", async (req, res) => {
       .select()
       .single();
 
-if (error) {
-  console.error("Error obteniendo rutas:", error);
-  return res.status(500).json({
-    mensaje: "No fue posible consultar las rutas.",
-    detalle: error.message,
-  });
-}
+    if (error) {
+      console.error("Error publicando ruta:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible publicar la ruta.",
+        detalle: error.message,
+      });
+    }
 
     return res.status(201).json({
       mensaje: "Ruta publicada correctamente.",
@@ -730,7 +758,7 @@ if (error) {
     console.error("Error detallado al publicar ruta:", error);
     return res.status(500).json({
       mensaje: "No fue posible publicar la ruta.",
-      detalles: error.message
+      detalles: error.message,
     });
   }
 });
@@ -745,7 +773,9 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ mensaje: "El ID del conductor es obligatorio." });
+      return res.status(400).json({
+        mensaje: "El ID del conductor es obligatorio.",
+      });
     }
 
     const { data, error } = await dbClient
@@ -771,7 +801,9 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
 
     if (error) {
       console.error("Error de Supabase en rutas de conductor:", error);
-      return res.status(500).json({ mensaje: "Error al consultar las rutas en la base de datos." });
+      return res.status(500).json({
+        mensaje: "Error al consultar las rutas en la base de datos.",
+      });
     }
 
     return res.status(200).json(data || []);
@@ -782,7 +814,6 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
     });
   }
 });
-
 // ------------------------------------------------------------------
 // 11. SOLICITAR CUPO
 // POST /api/solicitudes
@@ -947,11 +978,11 @@ app.use((error, req, res, next) => {
   next(error);
 });
 
-
 // ------------------------------------------------------------------
-// 13. REGISTRAR O ACTUALIZAR VEHÍCULO DE UN CONDUCTOR
+// 13. REGISTRAR O ACTUALIZAR VEHÍCULO
 // POST /api/vehiculos
 // ------------------------------------------------------------------
+
 app.post("/api/vehiculos", async (req, res) => {
   try {
     const { conductor_id, tipo, marca_modelo, placa } = req.body;
@@ -962,13 +993,13 @@ app.post("/api/vehiculos", async (req, res) => {
       });
     }
 
-    // Guardar o actualizar si ya existe un vehículo para este conductor
+    // Guardar o actualizar el vehículo asociado al usuario.
     const { data, error } = await dbClient
       .from("vehiculos")
       .upsert(
         [
           {
-            usuario_id: conductor_id, // Coincide con la columna de tu tabla en Supabase
+            usuario_id: conductor_id,
             tipo: tipo ? tipo.trim() : "Automóvil",
             marca_modelo: marca_modelo.trim(),
             placa: placa.trim().toUpperCase(),
@@ -1005,4 +1036,3 @@ app.listen(PORT, () => {
     `Servidor TdeA GO corriendo en http://localhost:${PORT}`
   );
 });
-

@@ -1,11 +1,12 @@
 import "./App.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Routes,
   Route,
   Link,
   useNavigate,
+  useLocation,
   Navigate,
 } from "react-router-dom";
 
@@ -27,8 +28,36 @@ function Aplicacion() {
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
   const [mostrarMenuMovil, setMostrarMenuMovil] = useState(false);
+  const contenedorUsuarioRef = useRef(null);
 
   const navegar = useNavigate();
+  const ubicacion = useLocation();
+
+  // Cerrar el menú del usuario al hacer clic fuera de él.
+  useEffect(() => {
+    const cerrarMenuAlHacerClicFuera = (evento) => {
+      if (
+        contenedorUsuarioRef.current &&
+        !contenedorUsuarioRef.current.contains(evento.target)
+      ) {
+        setMostrarMenuUsuario(false);
+      }
+    };
+
+    document.addEventListener("mousedown", cerrarMenuAlHacerClicFuera);
+    document.addEventListener("touchstart", cerrarMenuAlHacerClicFuera);
+
+    return () => {
+      document.removeEventListener("mousedown", cerrarMenuAlHacerClicFuera);
+      document.removeEventListener("touchstart", cerrarMenuAlHacerClicFuera);
+    };
+  }, []);
+
+  // Cerrar los menús cuando cambia la página.
+  useEffect(() => {
+    setMostrarMenuUsuario(false);
+    setMostrarMenuMovil(false);
+  }, [ubicacion.pathname]);
 
   // =========================================================
   // RECUPERAR USUARIO
@@ -127,26 +156,23 @@ function Aplicacion() {
   const cambiarRol = (nuevoRol) => {
     if (!usuario) return;
 
-    const usuarioActualizado = {
-      ...usuario,
-      rol: nuevoRol,
-    };
-
-    setUsuario(usuarioActualizado);
-
-    localStorage.setItem(
-      "tdea_go_usuario",
-      JSON.stringify(usuarioActualizado)
-    );
-
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
 
+    // No permitir activar el rol de conductor desde el menú.
+    // Primero debe registrar su vehículo desde Mi cuenta.
     if (nuevoRol === "conductor") {
-      navegar("/publicar");
-    } else {
-      navegar("/buscar");
+      navegar("/mi-cuenta");
+      return;
     }
+
+    const usuarioActualizado = {
+      ...usuario,
+      rol: "pasajero",
+    };
+
+    actualizarUsuario(usuarioActualizado);
+    navegar("/buscar");
   };
 
   // =========================================================
@@ -460,7 +486,7 @@ function Aplicacion() {
           <div className="acciones-encabezado">
 
             {usuario ? (
-              <div className="contenedor-usuario">
+              <div className="contenedor-usuario" ref={contenedorUsuarioRef}>
 
                 {/* -------------------------------------------
                     BOTÓN DEL USUARIO

@@ -714,9 +714,13 @@ app.post("/api/rutas", async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      throw error;
-    }
+if (error) {
+  console.error("Error obteniendo rutas:", error);
+  return res.status(500).json({
+    mensaje: "No fue posible consultar las rutas.",
+    detalle: error.message,
+  });
+}
 
     return res.status(201).json({
       mensaje: "Ruta publicada correctamente.",

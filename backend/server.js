@@ -577,6 +577,7 @@ app.delete(
 // GET /api/rutas
 // ------------------------------------------------------------------
 
+
 app.get("/api/rutas", async (req, res) => {
   try {
     const { data, error } = await dbClient
@@ -595,51 +596,53 @@ app.get("/api/rutas", async (req, res) => {
         tarifa_contribucion,
         estado,
         conductor_id,
+        vehiculo_id,
         creado_en,
-        profiles:conductor_id (
+        conductor:profiles!fk_rutas_conductor_id_profiles (
           id,
           nombre_completo,
+          correo,
           telefono,
+          rol,
           verificado,
           foto_url
         ),
-        vehiculos:conductor_id (
+        vehiculo:vehiculos!fk_rutas_vehiculo_id_vehiculos (
+          id,
           tipo,
           marca_modelo,
-          placa
+          placa,
+          color,
+          capacidad_maxima
         )
       `)
       .order("fecha_hora_salida", { ascending: true });
 
     if (error) {
-      throw error;
+      console.error("Error obteniendo rutas:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar las rutas.",
+        detalle: error.message,
+      });
     }
 
     const rutas = (data || []).map((ruta) => ({
-      id: ruta.id,
-      origen: ruta.origen,
-      destino: ruta.destino,
-      lat_origen: ruta.lat_origen,
-      lng_origen: ruta.lng_origen,
-      lat_destino: ruta.lat_destino,
-      lng_destino: ruta.lng_destino,
-      fecha_hora_salida: ruta.fecha_hora_salida,
-      fecha: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(0, 10) : "",
-      hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
-      cupos_totales: ruta.cupos_totales,
-      cupos_disponibles: ruta.cupos_disponibles,
-      tarifa_contribucion: ruta.tarifa_contribucion,
-      estado: ruta.estado,
-      conductor_id: ruta.conductor_id,
-      conductor: ruta.profiles || null,
-      vehiculo: Array.isArray(ruta.vehiculos) ? ruta.vehiculos[0] : ruta.vehiculos || null,
-      creado_en: ruta.creado_en,
+      ...ruta,
+      fecha: ruta.fecha_hora_salida
+        ? String(ruta.fecha_hora_salida).slice(0, 10)
+        : "",
+      hora: ruta.fecha_hora_salida
+        ? String(ruta.fecha_hora_salida).slice(11, 16)
+        : "",
+      conductor: ruta.conductor || null,
+      vehiculo: ruta.vehiculo || null,
     }));
 
-    res.json(rutas);
+    return res.json(rutas);
   } catch (error) {
     console.error("Error obteniendo rutas:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       mensaje: "No fue posible consultar las rutas.",
     });
   }

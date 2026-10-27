@@ -1,5 +1,6 @@
 import "./MiCuenta.css";
 import { useEffect, useRef, useState } from "react";
+import RegistrarVehiculo from "./RegistrarVehiculo";
 
 const API_URL = "http://localhost:5000";
 
@@ -600,6 +601,9 @@ function MiCuenta({
         <div className="mi-cuenta-introduccion">
 
           <div>
+          <div className="mi-cuenta-introduccion">
+
+          </div>
 
             <span className="mi-cuenta-etiqueta">
               MI CUENTA
@@ -927,6 +931,15 @@ function MiCuenta({
           </article>
 
         </div>
+
+        {/* ==================================================
+            REGISTRO DE VEHÍCULO (Solo visible para conductores)
+            ================================================== */}
+        {esConductor && (
+          <div style={{ margin: "30px 0" }}>
+            <RegistrarVehiculo usuarioId={idUsuario} />
+          </div>
+        )}
 
         {/* ==================================================
             ACCIONES SEGÚN ROL

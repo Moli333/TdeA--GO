@@ -595,11 +595,21 @@ app.get("/api/rutas", async (req, res) => {
         tarifa_contribucion,
         estado,
         conductor_id,
-        creado_en
+        creado_en,
+        profiles:conductor_id (
+          id,
+          nombre_completo,
+          telefono,
+          verificado,
+          foto_url
+        ),
+        vehiculos:conductor_id (
+          tipo,
+          marca_modelo,
+          placa
+        )
       `)
-      .order("fecha_hora_salida", {
-        ascending: true,
-      });
+      .order("fecha_hora_salida", { ascending: true });
 
     if (error) {
       throw error;
@@ -614,17 +624,15 @@ app.get("/api/rutas", async (req, res) => {
       lat_destino: ruta.lat_destino,
       lng_destino: ruta.lng_destino,
       fecha_hora_salida: ruta.fecha_hora_salida,
-      fecha: ruta.fecha_hora_salida
-        ? String(ruta.fecha_hora_salida).slice(0, 10)
-        : "",
-      hora: ruta.fecha_hora_salida
-        ? String(ruta.fecha_hora_salida).slice(11, 16)
-        : "",
+      fecha: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(0, 10) : "",
+      hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
       cupos_totales: ruta.cupos_totales,
       cupos_disponibles: ruta.cupos_disponibles,
       tarifa_contribucion: ruta.tarifa_contribucion,
       estado: ruta.estado,
       conductor_id: ruta.conductor_id,
+      conductor: ruta.profiles || null,
+      vehiculo: Array.isArray(ruta.vehiculos) ? ruta.vehiculos[0] : ruta.vehiculos || null,
       creado_en: ruta.creado_en,
     }));
 
@@ -932,8 +940,57 @@ app.use((error, req, res, next) => {
   next(error);
 });
 
+
 // ------------------------------------------------------------------
-// 13. INICIO DEL SERVIDOR
+// 13. REGISTRAR O ACTUALIZAR VEHÍCULO DE UN CONDUCTOR
+// POST /api/vehiculos
+// ------------------------------------------------------------------
+app.post("/api/vehiculos", async (req, res) => {
+  try {
+    const { conductor_id, tipo, marca_modelo, placa } = req.body;
+
+    if (!conductor_id || !marca_modelo || !placa) {
+      return res.status(400).json({
+        mensaje: "Faltan datos obligatorios del vehículo (conductor, marca/modelo o placa).",
+      });
+    }
+
+    // Guardar o actualizar si ya existe un vehículo para este conductor
+    const { data, error } = await dbClient
+      .from("vehiculos")
+      .upsert(
+        [
+          {
+            usuario_id: conductor_id, // Coincide con la columna de tu tabla en Supabase
+            tipo: tipo ? tipo.trim() : "Automóvil",
+            marca_modelo: marca_modelo.trim(),
+            placa: placa.trim().toUpperCase(),
+          },
+        ],
+        { onConflict: "usuario_id" }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json({
+      mensaje: "Vehículo registrado correctamente.",
+      vehiculo: data,
+    });
+  } catch (error) {
+    console.error("Error guardando vehículo:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible registrar el vehículo.",
+      detalles: error.message,
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// 14. INICIO DEL SERVIDOR
 // ------------------------------------------------------------------
 
 app.listen(PORT, () => {
@@ -941,3 +998,4 @@ app.listen(PORT, () => {
     `Servidor TdeA GO corriendo en http://localhost:${PORT}`
   );
 });
+

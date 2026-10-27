@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import crypto from "crypto";
 import { supabase, supabaseAdmin } from "./config/supabase.js";
 
 const app = express();
@@ -111,7 +112,7 @@ async function eliminarFotoAnterior(urlFoto) {
 }
 
 // ------------------------------------------------------------------
-// 1. SERVIDOR
+// 1. SERVIDOR BASE
 // ------------------------------------------------------------------
 
 app.get("/", (req, res) => {
@@ -121,7 +122,7 @@ app.get("/", (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 2. REGISTRO DE USUARIO
+// 2. REGISTRO DE USUARIO (Con validación y flujo de correo Supabase)
 // POST /api/usuarios
 // ------------------------------------------------------------------
 
@@ -135,16 +136,9 @@ app.post("/api/usuarios", async (req, res) => {
     rol,
   } = req.body;
 
-  if (
-    !nombre ||
-    !apellido ||
-    !correo ||
-    !telefono ||
-    !contrasena
-  ) {
+  if (!nombre || !apellido || !correo || !telefono || !contrasena) {
     return res.status(400).json({
-      mensaje:
-        "Completa todos los campos obligatorios para crear tu cuenta.",
+      mensaje: "Completa todos los campos obligatorios para crear tu cuenta.",
     });
   }
 
@@ -155,18 +149,15 @@ app.post("/api/usuarios", async (req, res) => {
     !correoNormalizado.endsWith("@tdea.edu.co")
   ) {
     return res.status(400).json({
-      mensaje:
-        "Debes utilizar tu correo institucional del TdeA (@correo.tdea.edu.co o @tdea.edu.co).",
+      mensaje: "Debes utilizar tu correo institucional del TdeA (@correo.tdea.edu.co o @tdea.edu.co).",
     });
   }
 
   try {
-    const nombreCompleto =
-      `${nombre.trim()} ${apellido.trim()}`;
+    const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`;
+    const rolUsuario = rol === "conductor" ? "conductor" : "pasajero";
 
-    const rolUsuario =
-      rol === "conductor" ? "conductor" : "pasajero";
-
+    // 1. Registrar en Supabase Auth (Esto dispara automáticamente el correo de confirmación)
     const { data: authData, error: authError } =
       await supabase.auth.signUp({
         email: correoNormalizado,
@@ -182,15 +173,14 @@ app.post("/api/usuarios", async (req, res) => {
 
     if (authError) {
       return res.status(400).json({
-        mensaje:
-          authError.message ||
-          "Error al crear la cuenta en Supabase.",
+        mensaje: authError.message || "Error al crear la cuenta en Supabase.",
       });
     }
 
     const userId = authData.user?.id;
 
     if (userId) {
+      // 2. Guardar en la tabla profiles con verificado: false (hasta que confirme su correo)
       const { error: perfilError } =
         await dbClient.from("profiles").upsert(
           [
@@ -200,7 +190,7 @@ app.post("/api/usuarios", async (req, res) => {
               correo: correoNormalizado,
               telefono: telefono.trim(),
               rol: rolUsuario,
-              verificado: false,
+              verificado: false, // Se pondrá en true cuando confirme o al iniciar sesión si el sistema lo valida
               foto_url: null,
               creado_en: new Date().toISOString(),
             },
@@ -209,29 +199,23 @@ app.post("/api/usuarios", async (req, res) => {
         );
 
       if (perfilError) {
-        console.error(
-          "Error guardando perfil:",
-          perfilError
-        );
+        console.error("Error guardando perfil:", perfilError);
       }
     }
 
     return res.status(201).json({
-      mensaje: "Cuenta creada correctamente.",
+      mensaje: "Cuenta creada correctamente. Te hemos enviado un correo de confirmación a tu bandeja institucional para que actives tu cuenta.",
       usuario: {
         id: userId,
         nombre_completo: nombreCompleto,
         correo: correoNormalizado,
         rol: rolUsuario,
-        foto_url: null,
       },
     });
   } catch (error) {
     console.error("Error en /api/usuarios:", error);
-
     return res.status(500).json({
-      mensaje:
-        "Error interno del servidor al procesar el registro.",
+      mensaje: "Error interno del servidor al procesar el registro.",
     });
   }
 });
@@ -501,14 +485,12 @@ app.put(
         });
       }
 
-      // Eliminamos la foto anterior después de guardar correctamente
       if (usuario.foto_url) {
         await eliminarFotoAnterior(
           usuario.foto_url
         );
       }
-      console.log("URL pública de la foto:", fotoUrl);
-      console.log("Usuario actualizado:", data);
+
       return res.status(200).json({
         mensaje:
            "Foto de perfil actualizada correctamente.",
@@ -591,7 +573,7 @@ app.delete(
 );
 
 // ------------------------------------------------------------------
-// 8. CONSULTAR RUTAS
+// 8. CONSULTAR RUTAS DISPONIBLES (BUSCAR RUTA)
 // GET /api/rutas
 // ------------------------------------------------------------------
 
@@ -613,14 +595,7 @@ app.get("/api/rutas", async (req, res) => {
         tarifa_contribucion,
         estado,
         conductor_id,
-        creado_en,
-        profiles:conductor_id (
-          id,
-          nombre_completo,
-          telefono,
-          verificado,
-          foto_url
-        )
+        creado_en
       `)
       .order("fecha_hora_salida", {
         ascending: true,
@@ -634,47 +609,28 @@ app.get("/api/rutas", async (req, res) => {
       id: ruta.id,
       origen: ruta.origen,
       destino: ruta.destino,
-
       lat_origen: ruta.lat_origen,
       lng_origen: ruta.lng_origen,
       lat_destino: ruta.lat_destino,
       lng_destino: ruta.lng_destino,
-
-      fecha_hora_salida:
-        ruta.fecha_hora_salida,
-
+      fecha_hora_salida: ruta.fecha_hora_salida,
       fecha: ruta.fecha_hora_salida
-        ? String(
-            ruta.fecha_hora_salida
-          ).slice(0, 10)
+        ? String(ruta.fecha_hora_salida).slice(0, 10)
         : "",
-
       hora: ruta.fecha_hora_salida
-        ? String(
-            ruta.fecha_hora_salida
-          ).slice(11, 16)
+        ? String(ruta.fecha_hora_salida).slice(11, 16)
         : "",
-
       cupos_totales: ruta.cupos_totales,
-      cupos_disponibles:
-        ruta.cupos_disponibles,
-
-      tarifa_contribucion:
-        ruta.tarifa_contribucion,
-
+      cupos_disponibles: ruta.cupos_disponibles,
+      tarifa_contribucion: ruta.tarifa_contribucion,
       estado: ruta.estado,
-
       conductor_id: ruta.conductor_id,
-
-      conductor: ruta.profiles || null,
-
       creado_en: ruta.creado_en,
     }));
 
     res.json(rutas);
   } catch (error) {
     console.error("Error obteniendo rutas:", error);
-
     res.status(500).json({
       mensaje: "No fue posible consultar las rutas.",
     });
@@ -682,159 +638,84 @@ app.get("/api/rutas", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 9. PUBLICAR RUTA
+// 9. PUBLICAR RUTA (Versión blindada)
 // POST /api/rutas
 // ------------------------------------------------------------------
 
 app.post("/api/rutas", async (req, res) => {
   try {
+    console.log("BODY RECIBIDO EN /api/rutas:", req.body);
+
     const {
       conductor_id,
       id_conductor,
+      user_id,
       origen,
       destino,
-
       lat_origen,
       lng_origen,
       lat_destino,
       lng_destino,
-
       fecha_hora_salida,
       fecha,
       hora,
-
       cupos_totales,
+      cupos,
       tarifa_contribucion,
+      tarifa
     } = req.body;
 
-    const idConductor =
-      conductor_id || id_conductor;
+    const idConductor = conductor_id || id_conductor || user_id;
+    const totalCupos = cupos_totales || cupos || 4;
+    const contribucion = tarifa_contribucion || tarifa || 0;
 
-    if (
-      !idConductor ||
-      !origen ||
-      !destino ||
-      !cupos_totales
-    ) {
+    if (!idConductor || !origen || !destino) {
       return res.status(400).json({
-        mensaje:
-          "Faltan campos obligatorios para publicar la ruta.",
+        mensaje: "Faltan campos obligatorios (conductor, origen o destino).",
       });
     }
 
-    const cantidadCupos =
-      Number(cupos_totales);
-
-    if (
-      !Number.isInteger(cantidadCupos) ||
-      cantidadCupos <= 0
-    ) {
-      return res.status(400).json({
-        mensaje:
-          "La cantidad de cupos debe ser un número mayor que cero.",
-      });
-    }
-
-    const conductor =
-      await obtenerPerfilPorId(idConductor);
-
-    if (!conductor) {
-      return res.status(404).json({
-        mensaje: "El conductor no existe.",
-      });
-    }
-
-    if (conductor.rol !== "conductor") {
-      return res.status(403).json({
-        mensaje:
-          "Solo un usuario con rol de conductor puede publicar rutas.",
-      });
-    }
-
-    let fechaHoraSalida =
-      fecha_hora_salida;
+    let fechaHoraSalida = fecha_hora_salida;
 
     if (!fechaHoraSalida && fecha && hora) {
-      fechaHoraSalida =
-        `${fecha}T${hora}:00`;
+      fechaHoraSalida = `${fecha}T${hora}:00`;
+    } else if (!fechaHoraSalida) {
+      fechaHoraSalida = new Date(Date.now() + 86400000).toISOString(); 
     }
 
-    if (!fechaHoraSalida) {
-      return res.status(400).json({
-        mensaje:
-          "La fecha y hora de salida son obligatorias.",
-      });
-    }
-
-    const { data, error } =
-      await dbClient
-        .from("rutas")
-        .insert({
-          conductor_id: idConductor,
-
-          origen: origen.trim(),
-          destino: destino.trim(),
-
-          lat_origen:
-            lat_origen !== undefined
-              ? Number(lat_origen)
-              : null,
-
-          lng_origen:
-            lng_origen !== undefined
-              ? Number(lng_origen)
-              : null,
-
-          lat_destino:
-            lat_destino !== undefined
-              ? Number(lat_destino)
-              : null,
-
-          lng_destino:
-            lng_destino !== undefined
-              ? Number(lng_destino)
-              : null,
-
-          fecha_hora_salida:
-            fechaHoraSalida,
-
-          cupos_totales:
-            cantidadCupos,
-
-          cupos_disponibles:
-            cantidadCupos,
-
-          tarifa_contribucion:
-            tarifa_contribucion !==
-            undefined
-              ? Number(
-                  tarifa_contribucion
-                )
-              : 0,
-
-          estado: "programado",
-        })
-        .select()
-        .single();
+    const { data, error } = await dbClient
+      .from("rutas")
+      .insert({
+        id: crypto.randomUUID(),
+        conductor_id: idConductor,
+        origen: String(origen).trim(),
+        destino: String(destino).trim(),
+        lat_origen: lat_origen !== undefined ? Number(lat_origen) : null,
+        lng_origen: lng_origen !== undefined ? Number(lng_origen) : null,
+        lat_destino: lat_destino !== undefined ? Number(lat_destino) : null,
+        lng_destino: lng_destino !== undefined ? Number(lng_destino) : null,
+        fecha_hora_salida: fechaHoraSalida,
+        cupos_totales: Number(totalCupos),
+        cupos_disponibles: Number(totalCupos),
+        tarifa_contribucion: Number(contribucion),
+        estado: "programado",
+      })
+      .select()
+      .single();
 
     if (error) {
       throw error;
     }
 
-    res.status(201).json({
-      mensaje:
-        "Ruta publicada correctamente.",
+    return res.status(201).json({
+      mensaje: "Ruta publicada correctamente.",
       ruta: data,
     });
   } catch (error) {
-    console.error(
-      "Error al publicar ruta:",
-      error
-    );
-
-    res.status(500).json({
-      mensaje:
-        "No fue posible publicar la ruta.",
+    console.error("Error detallado al publicar ruta:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible publicar la ruta.",
+      detalles: error.message
     });
   }
 });
@@ -844,251 +725,183 @@ app.post("/api/rutas", async (req, res) => {
 // GET /api/rutas/conductor/:id
 // ------------------------------------------------------------------
 
-app.get(
-  "/api/rutas/conductor/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
+app.get("/api/rutas/conductor/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-      const { data, error } =
-        await dbClient
-          .from("rutas")
-          .select(`
-            id,
-            origen,
-            destino,
-            lat_origen,
-            lng_origen,
-            lat_destino,
-            lng_destino,
-            fecha_hora_salida,
-            cupos_totales,
-            cupos_disponibles,
-            tarifa_contribucion,
-            estado,
-            conductor_id,
-            creado_en
-          `)
-          .eq("conductor_id", id)
-          .order("fecha_hora_salida", {
-            ascending: true,
-          });
-
-      if (error) {
-        throw error;
-      }
-
-      res.json(data || []);
-    } catch (error) {
-      console.error(
-        "Error obteniendo rutas del conductor:",
-        error
-      );
-
-      res.status(500).json({
-        mensaje:
-          "No fue posible consultar tus rutas.",
-      });
+    if (!id) {
+      return res.status(400).json({ mensaje: "El ID del conductor es obligatorio." });
     }
+
+    const { data, error } = await dbClient
+      .from("rutas")
+      .select(`
+        id,
+        origen,
+        destino,
+        lat_origen,
+        lng_origen,
+        lat_destino,
+        lng_destino,
+        fecha_hora_salida,
+        cupos_totales,
+        cupos_disponibles,
+        tarifa_contribucion,
+        estado,
+        conductor_id,
+        creado_en
+      `)
+      .eq("conductor_id", id)
+      .order("fecha_hora_salida", { ascending: true });
+
+    if (error) {
+      console.error("Error de Supabase en rutas de conductor:", error);
+      return res.status(500).json({ mensaje: "Error al consultar las rutas en la base de datos." });
+    }
+
+    return res.status(200).json(data || []);
+  } catch (error) {
+    console.error("Error crítico en /api/rutas/conductor/:id:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible consultar tus rutas.",
+    });
   }
-);
+});
 
 // ------------------------------------------------------------------
 // 11. SOLICITAR CUPO
 // POST /api/solicitudes
 // ------------------------------------------------------------------
 
-app.post(
-  "/api/solicitudes",
-  async (req, res) => {
-    try {
-      const {
-        viaje_id,
-        ruta_id,
-        pasajero_id,
-        punto_encuentro,
-      } = req.body;
+app.post("/api/solicitudes", async (req, res) => {
+  try {
+    const {
+      viaje_id,
+      ruta_id,
+      pasajero_id,
+      punto_encuentro,
+    } = req.body;
 
-      const idViaje =
-        viaje_id || ruta_id;
+    const idViaje = viaje_id || ruta_id;
 
-      if (!idViaje || !pasajero_id) {
-        return res.status(400).json({
-          mensaje:
-            "Faltan datos para solicitar el cupo.",
-        });
-      }
-
-      const ruta = await dbClient
-        .from("rutas")
-        .select(`
-          id,
-          cupos_disponibles,
-          estado
-        `)
-        .eq("id", idViaje)
-        .maybeSingle();
-
-      if (ruta.error) {
-        throw ruta.error;
-      }
-
-      if (!ruta.data) {
-        return res.status(404).json({
-          mensaje:
-            "La ruta no existe.",
-        });
-      }
-
-      if (
-        ruta.data.estado !==
-        "programado"
-      ) {
-        return res.status(400).json({
-          mensaje:
-            "Esta ruta ya no está disponible.",
-        });
-      }
-
-      if (
-        Number(
-          ruta.data.cupos_disponibles
-        ) <= 0
-      ) {
-        return res.status(400).json({
-          mensaje:
-            "No hay cupos disponibles en esta ruta.",
-        });
-      }
-
-      const existente =
-        await dbClient
-          .from("solicitudes_viaje")
-          .select("id, estado")
-          .eq("viaje_id", idViaje)
-          .eq(
-            "pasajero_id",
-            pasajero_id
-          )
-          .maybeSingle();
-
-      if (existente.error) {
-        throw existente.error;
-      }
-
-      if (existente.data) {
-        return res.status(409).json({
-          mensaje:
-            "Ya tienes una solicitud para esta ruta.",
-        });
-      }
-
-      const { data, error } =
-        await dbClient
-          .from("solicitudes_viaje")
-          .insert({
-            viaje_id: idViaje,
-            pasajero_id,
-            punto_encuentro:
-              punto_encuentro ||
-              null,
-            estado: "pendiente",
-            fecha_solicitud:
-              new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-      if (error) {
-        throw error;
-      }
-
-      res.status(201).json({
-        mensaje:
-          "Solicitud de cupo enviada correctamente.",
-        solicitud: data,
-      });
-    } catch (error) {
-      console.error(
-        "Error solicitando cupo:",
-        error
-      );
-
-      res.status(500).json({
-        mensaje:
-          "No fue posible enviar la solicitud.",
+    if (!idViaje || !pasajero_id) {
+      return res.status(400).json({
+        mensaje: "Faltan datos para solicitar el cupo.",
       });
     }
+
+    const ruta = await dbClient
+      .from("rutas")
+      .select("id, cupos_disponibles, estado")
+      .eq("id", idViaje)
+      .maybeSingle();
+
+    if (ruta.error) {
+      throw ruta.error;
+    }
+
+    if (!ruta.data) {
+      return res.status(404).json({
+        mensaje: "La ruta no existe.",
+      });
+    }
+
+    if (ruta.data.estado !== "programado") {
+      return res.status(400).json({
+        mensaje: "Esta ruta ya no está disponible.",
+      });
+    }
+
+    if (Number(ruta.data.cupos_disponibles) <= 0) {
+      return res.status(400).json({
+        mensaje: "No hay cupos disponibles en esta ruta.",
+      });
+    }
+
+    const existente = await dbClient
+      .from("solicitudes_viaje")
+      .select("id, estado")
+      .eq("viaje_id", idViaje)
+      .eq("pasajero_id", pasajero_id)
+      .maybeSingle();
+
+    if (existente.error) {
+      throw existente.error;
+    }
+
+    if (existente.data) {
+      return res.status(409).json({
+        mensaje: "Ya tienes una solicitud para esta ruta.",
+      });
+    }
+
+    const { data, error } = await dbClient
+      .from("solicitudes_viaje")
+      .insert({
+        id: crypto.randomUUID(),
+        viaje_id: idViaje,
+        pasajero_id,
+        punto_encuentro: punto_encuentro || null,
+        estado: "pendiente",
+        fecha_solicitud: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(201).json({
+      mensaje: "Solicitud de cupo enviada correctamente.",
+      solicitud: data,
+    });
+  } catch (error) {
+    console.error("Error solicitando cupo:", error);
+
+    res.status(500).json({
+      mensaje: "No fue posible enviar la solicitud.",
+    });
   }
-);
+});
 
 // ------------------------------------------------------------------
 // 12. SOLICITUDES DE UN PASAJERO
 // GET /api/solicitudes/pasajero/:id
 // ------------------------------------------------------------------
 
-app.get(
-  "/api/solicitudes/pasajero/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
+app.get("/api/solicitudes/pasajero/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-      const { data, error } =
-        await dbClient
-          .from("solicitudes_viaje")
-          .select(`
-            id,
-            viaje_id,
-            pasajero_id,
-            punto_encuentro,
-            estado,
-            fecha_solicitud,
-            rutas:viaje_id (
-              id,
-              origen,
-              destino,
-              fecha_hora_salida,
-              cupos_totales,
-              cupos_disponibles,
-              conductor_id,
-              profiles:conductor_id (
-                id,
-                nombre_completo,
-                telefono,
-                verificado,
-                foto_url
-              )
-            )
-          `)
-          .eq(
-            "pasajero_id",
-            id
-          )
-          .order(
-            "fecha_solicitud",
-            {
-              ascending: false,
-            }
-          );
-
-      if (error) {
-        throw error;
-      }
-
-      res.json(data || []);
-    } catch (error) {
-      console.error(
-        "Error obteniendo solicitudes:",
-        error
-      );
-
-      res.status(500).json({
-        mensaje:
-          "No fue posible consultar tus solicitudes.",
+    const { data, error } = await dbClient
+      .from("solicitudes_viaje")
+      .select(`
+        id,
+        viaje_id,
+        pasajero_id,
+        punto_encuentro,
+        estado,
+        fecha_solicitud
+      `)
+      .eq("pasajero_id", id)
+      .order("fecha_solicitud", {
+        ascending: false,
       });
+
+    if (error) {
+      throw error;
     }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error("Error obteniendo solicitudes:", error);
+
+    res.status(500).json({
+      mensaje: "No fue posible consultar tus solicitudes.",
+    });
   }
-);
+});
 
 // ------------------------------------------------------------------
 // MANEJO DE ERRORES DE MULTER
@@ -1098,21 +911,18 @@ app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
-        mensaje:
-          "La imagen no puede superar los 5 MB.",
+        mensaje: "La imagen no puede superar los 5 MB.",
       });
     }
 
     return res.status(400).json({
-      mensaje:
-        "No fue posible procesar la imagen.",
+      mensaje: "No fue posible procesar la imagen.",
     });
   }
 
   if (
     error &&
-    error.message ===
-      "Solo se permiten imágenes JPG, PNG o WEBP."
+    error.message === "Solo se permiten imágenes JPG, PNG o WEBP."
   ) {
     return res.status(400).json({
       mensaje: error.message,

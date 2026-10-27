@@ -983,34 +983,51 @@ app.use((error, req, res, next) => {
 // POST /api/vehiculos
 // ------------------------------------------------------------------
 
+
 app.post("/api/vehiculos", async (req, res) => {
   try {
-    const { conductor_id, tipo, marca_modelo, placa } = req.body;
+    const {
+      conductor_id,
+      tipo,
+      marca_modelo,
+      placa,
+      color,
+      capacidad_maxima,
+    } = req.body;
 
-    if (!conductor_id || !marca_modelo || !placa) {
+    const capacidad = Number(capacidad_maxima);
+
+    if (
+      !conductor_id ||
+      !marca_modelo?.trim() ||
+      !placa?.trim() ||
+      !capacidad_maxima ||
+      !Number.isInteger(capacidad) ||
+      capacidad < 1
+    ) {
       return res.status(400).json({
-        mensaje: "Faltan datos obligatorios del vehículo (conductor, marca/modelo o placa).",
+        mensaje:
+          "Completa el conductor, la marca/modelo, la placa y una capacidad máxima válida.",
       });
     }
 
-    // Guardar o actualizar el vehículo asociado al usuario.
+    const vehiculo = {
+      usuario_id: conductor_id,
+      tipo: tipo?.trim() || "Automóvil",
+      marca_modelo: marca_modelo.trim(),
+      placa: placa.trim().toUpperCase(),
+      color: color?.trim() || null,
+      capacidad_maxima: capacidad,
+    };
+
     const { data, error } = await dbClient
       .from("vehiculos")
-      .upsert(
-        [
-          {
-            usuario_id: conductor_id,
-            tipo: tipo ? tipo.trim() : "Automóvil",
-            marca_modelo: marca_modelo.trim(),
-            placa: placa.trim().toUpperCase(),
-          },
-        ],
-        { onConflict: "usuario_id" }
-      )
+      .upsert([vehiculo], { onConflict: "usuario_id" })
       .select()
       .single();
 
     if (error) {
+      console.error("Error guardando vehículo:", error);
       throw error;
     }
 
@@ -1020,12 +1037,14 @@ app.post("/api/vehiculos", async (req, res) => {
     });
   } catch (error) {
     console.error("Error guardando vehículo:", error);
+
     return res.status(500).json({
       mensaje: "No fue posible registrar el vehículo.",
       detalles: error.message,
     });
   }
 });
+
 
 // ------------------------------------------------------------------
 // 14. INICIO DEL SERVIDOR

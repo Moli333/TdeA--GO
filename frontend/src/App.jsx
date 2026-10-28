@@ -1,3 +1,4 @@
+
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -11,7 +12,6 @@ import {
 } from "react-router-dom";
 
 import Login from "./Login";
-
 import Inicio from "./paginas/Inicio";
 import BuscarRuta from "./paginas/BuscarRuta";
 import PublicarRuta from "./paginas/PublicarRuta";
@@ -19,19 +19,68 @@ import MiCuenta from "./paginas/MiCuenta";
 import MisSolicitudes from "./paginas/MisSolicitudes";
 import MisRutas from "./paginas/MisRutas";
 
-// Puerto del backend
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+const MENSAJE_CONFIRMACION =
+  "¡Correo confirmado correctamente! Ahora inicia sesión para continuar en TdeA GO.";
+
+// Recuperar la sesión guardada sin usar un efecto de React.
+function recuperarUsuario() {
+  try {
+    const usuarioGuardado = localStorage.getItem("tdea_go_usuario");
+    return usuarioGuardado ? JSON.parse(usuarioGuardado) : null;
+  } catch {
+    localStorage.removeItem("tdea_go_usuario");
+    return null;
+  }
+}
+
+// Esta ruta se declara fuera de Aplicacion para evitar que React
+// cree un componente nuevo en cada renderizado.
+function RutaSoloConductor({ usuario, children }) {
+  if (!usuario) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (String(usuario.rol || "").toLowerCase() !== "conductor") {
+    return <Navigate to="/buscar" replace />;
+  }
+
+  return children;
+}
+
 function Aplicacion() {
-  const [usuario, setUsuario] = useState(null);
-  const [mostrarLogin, setMostrarLogin] = useState(false);
+  const ubicacion = useLocation();
+  const navegar = useNavigate();
+
+  const confirmacionEnURL =
+    new URLSearchParams(ubicacion.search).get("confirmacion") ===
+    "exitosa";
+
+  const [usuario, setUsuario] = useState(recuperarUsuario);
+
+  const [mostrarLogin, setMostrarLogin] = useState(
+    () => confirmacionEnURL
+  );
+
+  const [mensajeConfirmacion, setMensajeConfirmacion] = useState(
+    () => (confirmacionEnURL ? MENSAJE_CONFIRMACION : "")
+  );
+
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
   const [mostrarMenuMovil, setMostrarMenuMovil] = useState(false);
+
   const contenedorUsuarioRef = useRef(null);
 
-  const navegar = useNavigate();
-  const ubicacion = useLocation();
+  // Limpiar el parámetro de confirmación de la dirección.
+  // La navegación es una sincronización con la URL; no se actualiza
+  // el estado de React dentro de este efecto.
+  useEffect(() => {
+    if (confirmacionEnURL) {
+      navegar("/", { replace: true });
+    }
+  }, [confirmacionEnURL, navegar]);
 
   // Cerrar el menú del usuario al hacer clic fuera de él.
   useEffect(() => {
@@ -48,76 +97,66 @@ function Aplicacion() {
     document.addEventListener("touchstart", cerrarMenuAlHacerClicFuera);
 
     return () => {
-      document.removeEventListener("mousedown", cerrarMenuAlHacerClicFuera);
-      document.removeEventListener("touchstart", cerrarMenuAlHacerClicFuera);
+      document.removeEventListener(
+        "mousedown",
+        cerrarMenuAlHacerClicFuera
+      );
+      document.removeEventListener(
+        "touchstart",
+        cerrarMenuAlHacerClicFuera
+      );
     };
   }, []);
 
-  // Cerrar los menús cuando cambia la página.
-  useEffect(() => {
+  // =========================================================
+  // NAVEGACIÓN Y MENÚS
+  // =========================================================
+
+  const navegarA = (ruta) => {
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
-  }, [ubicacion.pathname]);
+    navegar(ruta);
+  };
 
-  // =========================================================
-  // RECUPERAR USUARIO
-  // =========================================================
+  const irAlServicio = (ruta) => {
+    setMostrarMenuMovil(false);
+    setMostrarMenuUsuario(false);
 
-  useEffect(() => {
-    const usuarioGuardado =
-      localStorage.getItem("tdea_go_usuario");
-
-    if (usuarioGuardado) {
-      try {
-        const datosUsuario =
-          JSON.parse(usuarioGuardado);
-
-        setUsuario(datosUsuario);
-      } catch {
-        localStorage.removeItem("tdea_go_usuario");
-      }
+    if (!usuario) {
+      setMostrarLogin(true);
+      return;
     }
-  }, []);
+
+    navegar(ruta);
+  };
+
+  const navegarMenuMovil = (ruta) => {
+    setMostrarMenuMovil(false);
+    navegarA(ruta);
+  };
 
   // =========================================================
   // ACTUALIZAR USUARIO
   // =========================================================
 
   const actualizarUsuario = (datosActualizados) => {
-    if (!datosActualizados) {
-      return;
-    }
+    if (!datosActualizados) return;
 
-    setUsuario((usuarioActual) => {
-      const usuarioBase =
-        usuarioActual || {};
+    const usuarioActualizado = {
+      ...(usuario || {}),
+      ...datosActualizados,
+    };
 
-      const usuarioActualizado = {
-        ...usuarioBase,
-        ...datosActualizados,
-      };
+    setUsuario(usuarioActualizado);
 
-      console.log(
-        "USUARIO ACTUALIZADO EN APP:",
-        usuarioActualizado
-      );
-
-      console.log(
-        "FOTO GUARDADA EN APP:",
-        usuarioActualizado.foto_url
-      );
-
-      localStorage.setItem(
-        "tdea_go_usuario",
-        JSON.stringify(usuarioActualizado)
-      );
-
-      return usuarioActualizado;
-    });
+    localStorage.setItem(
+      "tdea_go_usuario",
+      JSON.stringify(usuarioActualizado)
+    );
   };
 
   // =========================================================
-  // LOGIN
+  // INICIO DE SESIÓN
   // =========================================================
 
   const manejarLoginExitoso = (datosUsuario) => {
@@ -131,8 +170,17 @@ function Aplicacion() {
     setMostrarLogin(false);
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
+    setMensajeConfirmacion("");
 
-    navegar("/mis-solicitudes");
+    const rol = String(datosUsuario?.rol || "pasajero")
+      .trim()
+      .toLowerCase();
+
+    if (rol === "conductor") {
+      navegar("/mi-cuenta");
+    } else {
+      navegar("/mis-solicitudes");
+    }
   };
 
   // =========================================================
@@ -159,8 +207,7 @@ function Aplicacion() {
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
 
-    // No permitir activar el rol de conductor desde el menú.
-    // Primero debe registrar su vehículo desde Mi cuenta.
+    // Para ser conductor, primero debe registrar el vehículo.
     if (nuevoRol === "conductor") {
       navegar("/mi-cuenta");
       return;
@@ -176,31 +223,7 @@ function Aplicacion() {
   };
 
   // =========================================================
-  // ACCESO A SERVICIOS
-  // =========================================================
-
-  const irAlServicio = (ruta) => {
-    setMostrarMenuMovil(false);
-
-    if (!usuario) {
-      setMostrarLogin(true);
-      return;
-    }
-
-    navegar(ruta);
-  };
-
-  // =========================================================
-  // NAVEGACIÓN DESDE EL MENÚ MÓVIL
-  // =========================================================
-
-  const navegarMenuMovil = (ruta) => {
-    setMostrarMenuMovil(false);
-    navegar(ruta);
-  };
-
-  // =========================================================
-  // NOMBRE DEL USUARIO
+  // DATOS DEL USUARIO
   // =========================================================
 
   const obtenerNombreUsuario = () => {
@@ -213,206 +236,114 @@ function Aplicacion() {
     );
   };
 
-  // =========================================================
-  // ROL ACTUAL
-  // =========================================================
+  const obtenerRolUsuario = () =>
+    String(usuario?.rol || "").toLowerCase();
 
-  const obtenerRolUsuario = () => {
-    if (!usuario) return "";
-
-    return usuario.rol?.toLowerCase() || "";
-  };
-
-  const esConductor =
-    obtenerRolUsuario() === "conductor";
-
-  const esPasajero =
-    obtenerRolUsuario() === "pasajero";
-
-  // =========================================================
-  // RUTA PROTEGIDA PARA CONDUCTORES
-  // =========================================================
-
-  const RutaSoloConductor = ({ children }) => {
-    if (!usuario) {
-      return <Navigate to="/" replace />;
-    }
-
-    if (!esConductor) {
-      return <Navigate to="/buscar" replace />;
-    }
-
-    return children;
-  };
-
-  // =========================================================
-  // FOTO DEL USUARIO
-  // =========================================================
-
-  const obtenerFotoUsuario = () => {
-    if (!usuario?.foto_url) {
-      return null;
-    }
-
-    return usuario.foto_url;
-  };
-
-  const fotoUsuario = obtenerFotoUsuario();
+  const esConductor = obtenerRolUsuario() === "conductor";
+  const esPasajero = obtenerRolUsuario() === "pasajero";
+  const fotoUsuario = usuario?.foto_url || null;
 
   return (
     <div className="app">
-
-      {/* =====================================================
-          ENCABEZADO
-          ===================================================== */}
-
+      {/* ENCABEZADO */}
       <header className="encabezado">
         <div className="contenedor encabezado-contenido">
-
-          {/* =================================================
-              MARCA
-              ================================================= */}
-
-          <Link to="/" className="marca-tdea">
-            <span
-              className="marca-tdea-principal"
-              translate="no"
-            >
+          <Link
+            to="/"
+            className="marca-tdea"
+            onClick={() => {
+              setMostrarMenuUsuario(false);
+              setMostrarMenuMovil(false);
+            }}
+          >
+            <span className="marca-tdea-principal" translate="no">
               TdeA
             </span>
-
-            <span
-              className="marca-go"
-              translate="no"
-            >
+            <span className="marca-go" translate="no">
               GO
             </span>
           </Link>
 
-          {/* =================================================
-              NAVEGACIÓN PRINCIPAL - ESCRITORIO
-              ================================================= */}
-
+          {/* NAVEGACIÓN DE ESCRITORIO */}
           <nav className="navegacion-principal">
-
             <Link
               to="/"
               className="enlace-navegacion"
+              onClick={() => setMostrarMenuUsuario(false)}
             >
               Inicio
             </Link>
 
             <button
               className="enlace-navegacion boton-navegacion"
-              onClick={() =>
-                irAlServicio("/buscar")
-              }
+              onClick={() => irAlServicio("/buscar")}
             >
               Buscar ruta
             </button>
-
-            {/* ---------------------------------------------
-                SOLO CONDUCTOR
-                --------------------------------------------- */}
 
             {esConductor && (
               <>
                 <button
                   className="enlace-navegacion boton-navegacion"
-                  onClick={() =>
-                    irAlServicio("/publicar")
-                  }
+                  onClick={() => irAlServicio("/publicar")}
                 >
                   Publicar ruta
                 </button>
 
                 <button
                   className="enlace-navegacion boton-navegacion"
-                  onClick={() =>
-                    irAlServicio("/mis-rutas")
-                  }
+                  onClick={() => irAlServicio("/mis-rutas")}
                 >
                   Mis rutas
                 </button>
               </>
             )}
 
-            {/* ---------------------------------------------
-                SOLO PASAJERO
-                --------------------------------------------- */}
-
             {esPasajero && (
               <button
                 className="enlace-navegacion boton-navegacion"
-                onClick={() =>
-                  irAlServicio("/mis-solicitudes")
-                }
+                onClick={() => irAlServicio("/mis-solicitudes")}
               >
                 Mis solicitudes
               </button>
             )}
 
-            {/* ---------------------------------------------
-                MI CUENTA
-                --------------------------------------------- */}
-
             {usuario && (
               <button
                 className="enlace-navegacion boton-navegacion"
-                onClick={() =>
-                  navegar("/mi-cuenta")
-                }
+                onClick={() => navegarA("/mi-cuenta")}
               >
                 Mi cuenta
               </button>
             )}
-
           </nav>
 
-          {/* =================================================
-              MENÚ MÓVIL
-              ================================================= */}
-
+          {/* MENÚ MÓVIL */}
           <div className="menu-movil">
-
             <button
               className="boton-menu-movil"
-              onClick={() =>
-                setMostrarMenuMovil(
-                  !mostrarMenuMovil
-                )
-              }
-              aria-expanded={
-                mostrarMenuMovil
-              }
+              onClick={() => setMostrarMenuMovil((actual) => !actual)}
+              aria-expanded={mostrarMenuMovil}
               aria-label="Abrir menú de navegación"
             >
               <span className="icono-menu-movil">
                 {mostrarMenuMovil ? "×" : "☰"}
               </span>
-
-              <span>
-                Menú
-              </span>
+              <span>Menú</span>
             </button>
 
             {mostrarMenuMovil && (
               <div className="lista-menu-movil">
-
                 <button
                   className="opcion-menu-movil"
-                  onClick={() =>
-                    navegarMenuMovil("/")
-                  }
+                  onClick={() => navegarMenuMovil("/")}
                 >
                   Inicio
                 </button>
 
                 <button
                   className="opcion-menu-movil"
-                  onClick={() =>
-                    irAlServicio("/buscar")
-                  }
+                  onClick={() => irAlServicio("/buscar")}
                 >
                   Buscar ruta
                 </button>
@@ -421,18 +352,14 @@ function Aplicacion() {
                   <>
                     <button
                       className="opcion-menu-movil"
-                      onClick={() =>
-                        irAlServicio("/publicar")
-                      }
+                      onClick={() => irAlServicio("/publicar")}
                     >
                       Publicar ruta
                     </button>
 
                     <button
                       className="opcion-menu-movil"
-                      onClick={() =>
-                        irAlServicio("/mis-rutas")
-                      }
+                      onClick={() => irAlServicio("/mis-rutas")}
                     >
                       Mis rutas
                     </button>
@@ -442,9 +369,7 @@ function Aplicacion() {
                 {esPasajero && (
                   <button
                     className="opcion-menu-movil"
-                    onClick={() =>
-                      irAlServicio("/mis-solicitudes")
-                    }
+                    onClick={() => irAlServicio("/mis-solicitudes")}
                   >
                     Mis solicitudes
                   </button>
@@ -453,10 +378,7 @@ function Aplicacion() {
                 {usuario && (
                   <button
                     className="opcion-menu-movil"
-                    onClick={() => {
-                      setMostrarMenuMovil(false);
-                      navegar("/mi-cuenta");
-                    }}
+                    onClick={() => navegarMenuMovil("/mi-cuenta")}
                   >
                     Mi cuenta
                   </button>
@@ -473,40 +395,26 @@ function Aplicacion() {
                     Iniciar sesión
                   </button>
                 )}
-
               </div>
             )}
-
           </div>
 
-          {/* =================================================
-              ACCIONES DEL ENCABEZADO
-              ================================================= */}
-
+          {/* ACCIONES DEL ENCABEZADO */}
           <div className="acciones-encabezado">
-
             {usuario ? (
-              <div className="contenedor-usuario" ref={contenedorUsuarioRef}>
-
-                {/* -------------------------------------------
-                    BOTÓN DEL USUARIO
-                    ------------------------------------------- */}
-
+              <div
+                className="contenedor-usuario"
+                ref={contenedorUsuarioRef}
+              >
                 <button
                   className="usuario-activo"
                   onClick={() =>
-                    setMostrarMenuUsuario(
-                      !mostrarMenuUsuario
-                    )
+                    setMostrarMenuUsuario((actual) => !actual)
                   }
-                  aria-expanded={
-                    mostrarMenuUsuario
-                  }
+                  aria-expanded={mostrarMenuUsuario}
                   aria-haspopup="true"
                 >
-
                   <span className="usuario-icono">
-
                     {fotoUsuario ? (
                       <img
                         src={fotoUsuario}
@@ -516,17 +424,12 @@ function Aplicacion() {
                             "No fue posible cargar la foto del encabezado:",
                             fotoUsuario
                           );
-
-                          evento.currentTarget.style.display =
-                            "none";
+                          evento.currentTarget.style.display = "none";
                         }}
                       />
                     ) : (
-                      obtenerNombreUsuario()
-                        .charAt(0)
-                        .toUpperCase()
+                      obtenerNombreUsuario().charAt(0).toUpperCase()
                     )}
-
                   </span>
 
                   <span className="usuario-nombre">
@@ -534,106 +437,53 @@ function Aplicacion() {
                   </span>
 
                   <span className="usuario-flecha">
-                    {mostrarMenuUsuario
-                      ? "▲"
-                      : "▼"}
+                    {mostrarMenuUsuario ? "▲" : "▼"}
                   </span>
-
                 </button>
-
-                {/* -------------------------------------------
-                    MENÚ DEL USUARIO
-                    ------------------------------------------- */}
 
                 {mostrarMenuUsuario && (
                   <div className="menu-usuario">
-
                     <div className="menu-usuario-cabecera">
-
-                      <strong>
-                        {obtenerNombreUsuario()}
-                      </strong>
-
+                      <strong>{obtenerNombreUsuario()}</strong>
                       <span className="rol-actual">
-                        {esConductor
-                          ? "Conductor"
-                          : "Pasajero"}
+                        {esConductor ? "Conductor" : "Pasajero"}
                       </span>
-
                     </div>
 
                     <button
                       className="opcion-menu-usuario"
-                      onClick={() => {
-                        setMostrarMenuUsuario(
-                          false
-                        );
-
-                        navegar("/mi-cuenta");
-                      }}
+                      onClick={() => navegarA("/mi-cuenta")}
                     >
                       Mi cuenta
                     </button>
 
-                    {/* ---------------------------------------
-                        CAMBIO DE PASAJERO A CONDUCTOR
-                        --------------------------------------- */}
-
                     {esPasajero && (
                       <button
                         className="opcion-menu-usuario opcion-cambio-rol"
-                        onClick={() =>
-                          cambiarRol("conductor")
-                        }
+                        onClick={() => cambiarRol("conductor")}
                       >
-                        <span className="icono-opcion">
-                          C
-                        </span>
-
+                        <span className="icono-opcion">C</span>
                         <span>
-                          <strong>
-                            Quiero ser conductor
-                          </strong>
-
-                          <small>
-                            Publica tus propias rutas
-                          </small>
+                          <strong>Quiero ser conductor</strong>
+                          <small>Publica tus propias rutas</small>
                         </span>
                       </button>
                     )}
-
-                    {/* ---------------------------------------
-                        CAMBIO DE CONDUCTOR A PASAJERO
-                        --------------------------------------- */}
 
                     {esConductor && (
                       <button
                         className="opcion-menu-usuario opcion-cambio-rol"
-                        onClick={() =>
-                          cambiarRol("pasajero")
-                        }
+                        onClick={() => cambiarRol("pasajero")}
                       >
-                        <span className="icono-opcion">
-                          P
-                        </span>
-
+                        <span className="icono-opcion">P</span>
                         <span>
-                          <strong>
-                            Quiero ser pasajero
-                          </strong>
-
-                          <small>
-                            Busca una ruta disponible
-                          </small>
+                          <strong>Quiero ser pasajero</strong>
+                          <small>Busca una ruta disponible</small>
                         </span>
                       </button>
                     )}
 
-                    {/* ---------------------------------------
-                        CERRAR SESIÓN
-                        --------------------------------------- */}
-
-                    <div className="separador-menu"></div>
+                    <div className="separador-menu" />
 
                     <button
                       className="opcion-menu-usuario opcion-cerrar-sesion"
@@ -641,56 +491,56 @@ function Aplicacion() {
                     >
                       Cerrar sesión
                     </button>
-
                   </div>
                 )}
-
               </div>
             ) : (
-
-              /* ---------------------------------------------
-                 USUARIO NO AUTENTICADO
-                 --------------------------------------------- */
-
               <button
                 className="boton-login-header"
-                onClick={() =>
-                  setMostrarLogin(true)
-                }
+                onClick={() => setMostrarLogin(true)}
               >
                 Iniciar sesión
               </button>
-
             )}
-
           </div>
-
         </div>
       </header>
 
-      {/* =====================================================
-          CONTENIDO PRINCIPAL
-          ===================================================== */}
+      {/* AVISO DE CONFIRMACIÓN DEL CORREO */}
+      {mensajeConfirmacion && (
+        <div
+          role="status"
+          style={{
+            maxWidth: "1100px",
+            margin: "16px auto",
+            padding: "14px 18px",
+            border: "1px solid #86c99a",
+            borderRadius: "10px",
+            backgroundColor: "#edf9f0",
+            color: "#205c32",
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Confirmación completada</strong>
+          <p style={{ margin: "4px 0 0" }}>
+            {mensajeConfirmacion}
+          </p>
+        </div>
+      )}
 
+      {/* CONTENIDO PRINCIPAL */}
       <main>
         <Routes>
-
-          {/* INICIO */}
-
           <Route
             path="/"
             element={
               <Inicio
                 usuario={usuario}
                 irAlServicio={irAlServicio}
-                abrirLogin={() =>
-                  setMostrarLogin(true)
-                }
+                abrirLogin={() => setMostrarLogin(true)}
               />
             }
           />
-
-          {/* BUSCAR RUTA */}
 
           <Route
             path="/buscar"
@@ -698,36 +548,23 @@ function Aplicacion() {
               <BuscarRuta
                 usuario={usuario}
                 API_URL={API_URL}
-                abrirLogin={() =>
-                  setMostrarLogin(true)
-                }
+                abrirLogin={() => setMostrarLogin(true)}
               />
             }
           />
 
-          {/* =================================================
-              PUBLICAR RUTA
-              SOLO CONDUCTOR
-              ================================================= */}
-
           <Route
             path="/publicar"
             element={
-              <RutaSoloConductor>
+              <RutaSoloConductor usuario={usuario}>
                 <PublicarRuta
                   usuario={usuario}
                   API_URL={API_URL}
-                  abrirLogin={() =>
-                    setMostrarLogin(true)
-                  }
+                  abrirLogin={() => setMostrarLogin(true)}
                 />
               </RutaSoloConductor>
             }
           />
-
-          {/* =================================================
-              MI CUENTA
-              ================================================= */}
 
           <Route
             path="/mi-cuenta"
@@ -735,24 +572,15 @@ function Aplicacion() {
               usuario ? (
                 <MiCuenta
                   usuario={usuario}
-                  actualizarUsuario={
-                    actualizarUsuario
-                  }
+                  actualizarUsuario={actualizarUsuario}
                   cerrarSesion={cerrarSesion}
                   API_URL={API_URL}
                 />
               ) : (
-                <Navigate
-                  to="/"
-                  replace
-                />
+                <Navigate to="/" replace />
               )
             }
           />
-
-          {/* =================================================
-              MIS SOLICITUDES
-              ================================================= */}
 
           <Route
             path="/mis-solicitudes"
@@ -763,23 +591,15 @@ function Aplicacion() {
                   API_URL={API_URL}
                 />
               ) : (
-                <Navigate
-                  to="/"
-                  replace
-                />
+                <Navigate to="/" replace />
               )
             }
           />
 
-          {/* =================================================
-              MIS RUTAS
-              SOLO CONDUCTOR
-              ================================================= */}
-
           <Route
             path="/mis-rutas"
             element={
-              <RutaSoloConductor>
+              <RutaSoloConductor usuario={usuario}>
                 <MisRutas
                   usuario={usuario}
                   API_URL={API_URL}
@@ -787,95 +607,56 @@ function Aplicacion() {
               </RutaSoloConductor>
             }
           />
-
         </Routes>
       </main>
 
-      {/* =====================================================
-          PIE DE PÁGINA
-          ===================================================== */}
-
+      {/* PIE DE PÁGINA */}
       <footer className="pie-pagina">
         <div className="contenedor pie-contenido">
-
           <div>
-
             <div className="marca-tdea marca-footer">
-
-              <span
-                className="marca-tdea-principal"
-                translate="no"
-              >
+              <span className="marca-tdea-principal" translate="no">
                 TdeA
               </span>
-
-              <span
-                className="marca-go"
-                translate="no"
-              >
+              <span className="marca-go" translate="no">
                 GO
               </span>
-
             </div>
 
             <p>
               Transporte compartido para la comunidad TdeA.
             </p>
-
           </div>
 
-          <div
-            className="pie-derechos"
-            translate="no"
-          >
+          <div className="pie-derechos" translate="no">
             © {new Date().getFullYear()} TdeA GO
           </div>
-
         </div>
       </footer>
 
-      {/* =====================================================
-          MODAL DE LOGIN
-          ===================================================== */}
-
+      {/* MODAL DE INICIO DE SESIÓN */}
       {mostrarLogin && (
         <div
           className="modal-overlay"
           onMouseDown={(evento) => {
-
-            if (
-              evento.target ===
-              evento.currentTarget
-            ) {
+            if (evento.target === evento.currentTarget) {
               setMostrarLogin(false);
             }
-
           }}
         >
-
           <div className="modal-card">
-
             <button
               className="modal-cerrar"
-              onClick={() =>
-                setMostrarLogin(false)
-              }
+              onClick={() => setMostrarLogin(false)}
               aria-label="Cerrar"
             >
               ×
             </button>
 
-            <Login
-              onLoginExitoso={
-                manejarLoginExitoso
-              }
-            />
-
+            <Login onLoginExitoso={manejarLoginExitoso} />
           </div>
-
         </div>
       )}
-
     </div>
   );
 }

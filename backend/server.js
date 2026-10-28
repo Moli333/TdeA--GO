@@ -127,8 +127,16 @@ app.get("/", (req, res) => {
 // ------------------------------------------------------------------
 
 
+
 app.post("/api/usuarios", async (req, res) => {
-  const { nombre, apellido, correo, telefono, contrasena } = req.body;
+  const {
+    nombre,
+    apellido,
+    correo,
+    telefono,
+    contrasena,
+    rol,
+  } = req.body;
 
   if (
     !nombre?.trim() ||
@@ -138,7 +146,14 @@ app.post("/api/usuarios", async (req, res) => {
     !contrasena
   ) {
     return res.status(400).json({
-      mensaje: "Completa todos los campos obligatorios para crear tu cuenta.",
+      mensaje:
+        "Completa todos los campos obligatorios para crear tu cuenta.",
+    });
+  }
+
+  if (contrasena.length < 6) {
+    return res.status(400).json({
+      mensaje: "La contraseña debe tener mínimo 6 caracteres.",
     });
   }
 
@@ -154,16 +169,39 @@ app.post("/api/usuarios", async (req, res) => {
     });
   }
 
+  // Validar el rol seleccionado.
+  const rolUsuario = String(rol || "pasajero")
+    .trim()
+    .toLowerCase();
+
+  if (!["conductor", "pasajero"].includes(rolUsuario)) {
+    return res.status(400).json({
+      mensaje: "El tipo de usuario seleccionado no es válido.",
+    });
+  }
+
   try {
-    const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`;
+    const nombreCompleto =
+      `${nombre.trim()} ${apellido.trim()}`;
+
     const telefonoNormalizado = telefono.trim();
-    const rolUsuario = "pasajero";
+
+    // URL de la Web App publicada.
+    // Se puede configurar FRONTEND_URL en Render.
+    const frontendUrl = (
+      process.env.FRONTEND_URL ||
+      "https://tdea-go.vercel.app"
+    ).replace(/\/+$/, "");
+
+    const urlConfirmacion =
+      `${frontendUrl}/?confirmacion=exitosa`;
 
     const { data: authData, error: authError } =
       await supabase.auth.signUp({
         email: correoNormalizado,
         password: contrasena,
         options: {
+          emailRedirectTo: urlConfirmacion,
           data: {
             nombre_completo: nombreCompleto,
             telefono: telefonoNormalizado,
@@ -173,15 +211,19 @@ app.post("/api/usuarios", async (req, res) => {
       });
 
     if (authError) {
-      console.error("Error creando usuario en Supabase Auth:", {
-        message: authError.message,
-        status: authError.status,
-        code: authError.code,
-      });
+      console.error(
+        "Error creando usuario en Supabase Auth:",
+        {
+          message: authError.message,
+          status: authError.status,
+          code: authError.code,
+        }
+      );
 
       return res.status(400).json({
-        mensaje: authError.message || "Error al crear la cuenta en Supabase.",
-        detalle: authError.message,
+        mensaje:
+          authError.message ||
+          "Error al crear la cuenta en Supabase.",
         codigo: authError.code || null,
       });
     }
@@ -189,17 +231,13 @@ app.post("/api/usuarios", async (req, res) => {
     const userId = authData.user?.id;
 
     if (!userId) {
-      console.error(
-        "Registro sin ID de usuario:",
-        authData
-      );
-
       return res.status(500).json({
         mensaje:
           "Supabase no devolvió el identificador del usuario. No se pudo completar el registro.",
       });
     }
 
+    // Guardar el rol elegido en el perfil.
     const { error: perfilError } = await dbClient
       .from("profiles")
       .upsert(
@@ -217,27 +255,35 @@ app.post("/api/usuarios", async (req, res) => {
       );
 
     if (perfilError) {
-      console.error("Error guardando perfil en profiles:", {
-        message: perfilError.message,
-        code: perfilError.code,
-        details: perfilError.details,
-        hint: perfilError.hint,
-      });
+      console.error(
+        "Error guardando perfil en profiles:",
+        {
+          message: perfilError.message,
+          code: perfilError.code,
+          details: perfilError.details,
+          hint: perfilError.hint,
+        }
+      );
 
       return res.status(500).json({
-        mensaje: "La cuenta se creó, pero no se pudo guardar el perfil.",
+        mensaje:
+          "La cuenta se creó, pero no se pudo guardar el perfil.",
         detalle: perfilError.message,
         codigo: perfilError.code || null,
-        detalles: perfilError.details || null,
-        sugerencia: perfilError.hint || null,
         usuarioCreado: true,
         usuarioId: userId,
       });
     }
 
+    const mensajeRol =
+      rolUsuario === "conductor"
+        ? "Después de confirmar tu correo e iniciar sesión, podrás continuar con el registro de tu vehículo."
+        : "Después de confirmar tu correo, podrás iniciar sesión y utilizar TdeA GO.";
+
     return res.status(201).json({
       mensaje:
-        "Cuenta creada correctamente. Te hemos enviado un correo de confirmación a tu bandeja institucional para que actives tu cuenta.",
+        "Cuenta creada correctamente. Revisa tu correo institucional y confirma tu dirección para activar tu cuenta. " +
+        mensajeRol,
       usuario: {
         id: userId,
         nombre_completo: nombreCompleto,
@@ -246,16 +292,19 @@ app.post("/api/usuarios", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error inesperado en /api/usuarios:", error);
+    console.error(
+      "Error inesperado en /api/usuarios:",
+      error
+    );
 
     return res.status(500).json({
-      mensaje: "Error interno del servidor al procesar el registro.",
+      mensaje:
+        "Error interno del servidor al procesar el registro.",
       detalle: error.message || "Error desconocido.",
       codigo: error.code || null,
     });
   }
 });
-
 
 // ------------------------------------------------------------------
 // 3. INICIO DE SESIÓN

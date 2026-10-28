@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 
 const API_URL =
@@ -28,6 +29,10 @@ function Login({ onLoginExitoso }) {
     setError("");
     setMensaje("");
   };
+
+  // =========================================================
+  // INICIAR SESIÓN
+  // =========================================================
 
   const iniciarSesion = async (e) => {
     e.preventDefault();
@@ -75,6 +80,10 @@ function Login({ onLoginExitoso }) {
       setCargando(false);
     }
   };
+
+  // =========================================================
+  // REGISTRAR USUARIO
+  // =========================================================
 
   const registrarUsuario = async (e) => {
     e.preventDefault();
@@ -124,21 +133,40 @@ function Login({ onLoginExitoso }) {
         );
       }
 
-      setMensaje(
-        "Cuenta creada correctamente. Ahora puedes iniciar sesión."
+      // Conservar el correo para facilitar el inicio de sesión.
+      const correoRegistrado = correo.trim();
+
+      // Guardar el rol pendiente para continuar el flujo
+      // después de confirmar la cuenta.
+      localStorage.setItem(
+        "tdea_go_registro_pendiente",
+        JSON.stringify({
+          correo: correoRegistrado,
+          rol,
+        })
       );
 
+      const mensajeBackend =
+        datos.mensaje ||
+        "Tu cuenta se creó correctamente. Revisa tu correo institucional para confirmar tu dirección.";
+
+      const mensajeRol =
+        rol === "conductor"
+          ? "Después de confirmar tu correo, inicia sesión para continuar con el registro de tu vehículo."
+          : "Después de confirmar tu correo, podrás iniciar sesión para ingresar a TdeA GO.";
+
+      setMensaje(`${mensajeBackend} ${mensajeRol}`);
+
+      // Limpiar los datos personales y la contraseña,
+      // pero mantener el correo para facilitar el acceso.
       setNombre("");
       setApellido("");
-      setCorreo("");
       setTelefono("");
       setContrasena("");
-      setRol("pasajero");
 
-      setTimeout(() => {
-        setModo("login");
-        setMensaje("");
-      }, 1800);
+      // No cambiar automáticamente al inicio de sesión.
+      // El estudiante podrá leer el mensaje y cambiar de modo
+      // cuando esté listo.
     } catch (error) {
       console.error("Error al registrar usuario:", error);
 
@@ -175,6 +203,7 @@ function Login({ onLoginExitoso }) {
                 onChange={(e) => setCorreo(e.target.value)}
                 placeholder="tu correo"
                 autoComplete="email"
+                required
               />
             </div>
 
@@ -189,6 +218,7 @@ function Login({ onLoginExitoso }) {
                   onChange={(e) => setContrasena(e.target.value)}
                   placeholder="Ingresa tu contraseña"
                   autoComplete="current-password"
+                  required
                 />
 
                 <button
@@ -271,6 +301,7 @@ function Login({ onLoginExitoso }) {
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Tu nombre"
                   autoComplete="given-name"
+                  required
                 />
               </div>
 
@@ -284,6 +315,7 @@ function Login({ onLoginExitoso }) {
                   onChange={(e) => setApellido(e.target.value)}
                   placeholder="Tu apellido"
                   autoComplete="family-name"
+                  required
                 />
               </div>
             </div>
@@ -300,6 +332,7 @@ function Login({ onLoginExitoso }) {
                 onChange={(e) => setCorreo(e.target.value)}
                 placeholder="tu correo"
                 autoComplete="email"
+                required
               />
             </div>
 
@@ -313,6 +346,7 @@ function Login({ onLoginExitoso }) {
                 onChange={(e) => setTelefono(e.target.value)}
                 placeholder="Tu número de teléfono"
                 autoComplete="tel"
+                required
               />
             </div>
 
@@ -333,6 +367,7 @@ function Login({ onLoginExitoso }) {
                   onChange={(e) => setContrasena(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
                   autoComplete="new-password"
+                  required
                 />
 
                 <button
@@ -360,10 +395,13 @@ function Login({ onLoginExitoso }) {
               <div className="role-options">
                 <button
                   type="button"
-                  className={`role-option ${
-                    rol === "pasajero" ? "selected" : ""
-                  }`}
-                  onClick={() => setRol("pasajero")}
+                  className={`role-option ${rol === "pasajero" ? "selected" : ""
+                    }`}
+                  onClick={() => {
+                    setRol("pasajero");
+                    setError("");
+                    setMensaje("");
+                  }}
                 >
                   <span className="role-icon">○</span>
 
@@ -375,10 +413,13 @@ function Login({ onLoginExitoso }) {
 
                 <button
                   type="button"
-                  className={`role-option ${
-                    rol === "conductor" ? "selected" : ""
-                  }`}
-                  onClick={() => setRol("conductor")}
+                  className={`role-option ${rol === "conductor" ? "selected" : ""
+                    }`}
+                  onClick={() => {
+                    setRol("conductor");
+                    setError("");
+                    setMensaje("");
+                  }}
                 >
                   <span className="role-icon">⌁</span>
 
@@ -401,13 +442,29 @@ function Login({ onLoginExitoso }) {
               <div className="login-success" role="status">
                 <span className="login-success-icon">✓</span>
                 <span>{mensaje}</span>
+
+                <button
+                  type="button"
+                  onClick={() => cambiarModo("login")}
+                  style={{
+                    display: "block",
+                    marginTop: "12px",
+                    padding: "8px 12px",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Ir a iniciar sesión
+                </button>
               </div>
             )}
 
             <button
               type="submit"
               className="login-submit register-submit"
-              disabled={cargando}
+              disabled={cargando || Boolean(mensaje)}
             >
               {cargando ? "Creando cuenta..." : "Crear cuenta"}
             </button>

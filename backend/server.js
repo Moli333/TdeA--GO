@@ -363,7 +363,7 @@ app.post("/api/login", async (req, res) => {
     } = await dbClient
       .from("vehiculos")
       .select("id")
-      .eq("usuario_id", user.id)
+      .eq("usuario_id", profile.id)
       .limit(1)
       .maybeSingle();
 
@@ -1175,6 +1175,37 @@ app.use((error, req, res, next) => {
   next(error);
 });
 
+
+app.get("/api/vehiculos/:usuarioId", async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const { data, error } = await dbClient
+      .from("vehiculos")
+      .select(
+        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
+      )
+      .eq("usuario_id", usuarioId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error al consultar vehículo:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar el vehículo registrado.",
+      });
+    }
+
+    return res.status(200).json({
+      vehiculo: data || null,
+    });
+  } catch (error) {
+    console.error("Error inesperado al consultar vehículo:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al consultar el vehículo.",
+    });
+  }
+});
+
 // ------------------------------------------------------------------
 // 13. REGISTRAR O ACTUALIZAR VEHÍCULO
 // POST /api/vehiculos
@@ -1236,6 +1267,43 @@ app.post("/api/vehiculos", async (req, res) => {
     return res.status(500).json({
       mensaje: "No fue posible registrar el vehículo.",
       detalles: error.message,
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// 13. CONSULTAR VEHÍCULO DE UN USUARIO
+// GET /api/vehiculos/:usuarioId
+// ------------------------------------------------------------------
+
+app.get("/api/vehiculos/:usuarioId", async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const { data, error } = await dbClient
+      .from("vehiculos")
+      .select(
+        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
+      )
+      .eq("usuario_id", usuarioId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error consultando vehículo:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar el vehículo registrado.",
+      });
+    }
+
+    return res.status(200).json({
+      vehiculo: data || null,
+    });
+  } catch (error) {
+    console.error("Error consultando vehículo:", error);
+
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al consultar el vehículo.",
     });
   }
 });

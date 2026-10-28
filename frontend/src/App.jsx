@@ -1,6 +1,6 @@
-
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
+
 import {
   BrowserRouter,
   Routes,
@@ -22,28 +22,75 @@ import MisRutas from "./paginas/MisRutas";
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const MENSAJE_CONFIRMACION =
-  "¡Correo confirmado correctamente! Ahora inicia sesión para continuar en TdeA GO.";
+// Recupera el usuario antes del primer renderizado.
+function cargarUsuarioGuardado() {
+  const usuarioGuardado = localStorage.getItem("tdea_go_usuario");
 
-// Recuperar la sesión guardada sin usar un efecto de React.
-function recuperarUsuario() {
+  if (!usuarioGuardado) {
+    return null;
+  }
+
   try {
-    const usuarioGuardado = localStorage.getItem("tdea_go_usuario");
-    return usuarioGuardado ? JSON.parse(usuarioGuardado) : null;
+    let datosUsuario = JSON.parse(usuarioGuardado);
+
+    const registroPendiente = localStorage.getItem(
+      "tdea_go_registro_pendiente"
+    );
+
+    if (registroPendiente) {
+      try {
+        const pendiente = JSON.parse(registroPendiente);
+
+        const correoUsuario = (
+          datosUsuario.correo ||
+          datosUsuario.email ||
+          ""
+        ).toLowerCase();
+
+        const correoPendiente = (
+          pendiente.correo || ""
+        ).toLowerCase();
+
+        if (
+          pendiente.rol === "conductor" &&
+          correoUsuario &&
+          correoUsuario === correoPendiente &&
+          datosUsuario.rol?.toLowerCase() !== "conductor"
+        ) {
+          datosUsuario = {
+            ...datosUsuario,
+            rol_solicitado: "conductor",
+            requiere_vehiculo: true,
+          };
+        }
+      } catch {
+        localStorage.removeItem("tdea_go_registro_pendiente");
+      }
+    }
+
+    return datosUsuario;
   } catch {
     localStorage.removeItem("tdea_go_usuario");
     return null;
   }
 }
 
-// Esta ruta se declara fuera de Aplicacion para evitar que React
-// cree un componente nuevo en cada renderizado.
-function RutaSoloConductor({ usuario, children }) {
+// Componente declarado fuera de Aplicacion para evitar
+// que React lo vuelva a crear en cada renderizado.
+function RutaSoloConductor({
+  usuario,
+  requiereRegistroVehiculo,
+  children,
+}) {
   if (!usuario) {
     return <Navigate to="/" replace />;
   }
 
-  if (String(usuario.rol || "").toLowerCase() !== "conductor") {
+  if (requiereRegistroVehiculo) {
+    return <Navigate to="/mi-cuenta" replace />;
+  }
+
+  if (usuario.rol?.toLowerCase() !== "conductor") {
     return <Navigate to="/buscar" replace />;
   }
 
@@ -51,38 +98,17 @@ function RutaSoloConductor({ usuario, children }) {
 }
 
 function Aplicacion() {
-  const ubicacion = useLocation();
-  const navegar = useNavigate();
-
-  const confirmacionEnURL =
-    new URLSearchParams(ubicacion.search).get("confirmacion") ===
-    "exitosa";
-
-  const [usuario, setUsuario] = useState(recuperarUsuario);
-
-  const [mostrarLogin, setMostrarLogin] = useState(
-    () => confirmacionEnURL
-  );
-
-  const [mensajeConfirmacion, setMensajeConfirmacion] = useState(
-    () => (confirmacionEnURL ? MENSAJE_CONFIRMACION : "")
-  );
-
+  const [usuario, setUsuario] = useState(cargarUsuarioGuardado);
+  const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
   const [mostrarMenuMovil, setMostrarMenuMovil] = useState(false);
 
   const contenedorUsuarioRef = useRef(null);
 
-  // Limpiar el parámetro de confirmación de la dirección.
-  // La navegación es una sincronización con la URL; no se actualiza
-  // el estado de React dentro de este efecto.
-  useEffect(() => {
-    if (confirmacionEnURL) {
-      navegar("/", { replace: true });
-    }
-  }, [confirmacionEnURL, navegar]);
+  const navegar = useNavigate();
+  const ubicacion = useLocation();
 
-  // Cerrar el menú del usuario al hacer clic fuera de él.
+  // Cierra el menú del usuario cuando se hace clic fuera.
   useEffect(() => {
     const cerrarMenuAlHacerClicFuera = (evento) => {
       if (
@@ -93,14 +119,22 @@ function Aplicacion() {
       }
     };
 
-    document.addEventListener("mousedown", cerrarMenuAlHacerClicFuera);
-    document.addEventListener("touchstart", cerrarMenuAlHacerClicFuera);
+    document.addEventListener(
+      "mousedown",
+      cerrarMenuAlHacerClicFuera
+    );
+
+    document.addEventListener(
+      "touchstart",
+      cerrarMenuAlHacerClicFuera
+    );
 
     return () => {
       document.removeEventListener(
         "mousedown",
         cerrarMenuAlHacerClicFuera
       );
+
       document.removeEventListener(
         "touchstart",
         cerrarMenuAlHacerClicFuera
@@ -108,84 +142,105 @@ function Aplicacion() {
     };
   }, []);
 
-  // =========================================================
-  // NAVEGACIÓN Y MENÚS
-  // =========================================================
+  const requiereRegistroVehiculo = Boolean(
+    usuario &&
+    (
+      usuario.requiere_vehiculo === true ||
+      (
+        usuario.rol_solicitado?.toLowerCase() === "conductor" &&
+        usuario.rol?.toLowerCase() !== "conductor"
+      )
+    )
+  );
 
-  const navegarA = (ruta) => {
-    setMostrarMenuUsuario(false);
-    setMostrarMenuMovil(false);
-    navegar(ruta);
-  };
+  // Redirige al registro del vehículo cuando sea necesario.
+  useEffect(() => {
+    if (
+      requiereRegistroVehiculo &&
+      ubicacion.pathname !== "/mi-cuenta"
+    ) {
+      navegar("/mi-cuenta", { replace: true });
+    }
+  }, [
+    requiereRegistroVehiculo,
+    ubicacion.pathname,
+    navegar,
+  ]);
 
-  const irAlServicio = (ruta) => {
-    setMostrarMenuMovil(false);
-    setMostrarMenuUsuario(false);
-
-    if (!usuario) {
-      setMostrarLogin(true);
+  const actualizarUsuario = (datosActualizados) => {
+    if (!datosActualizados) {
       return;
     }
 
-    navegar(ruta);
+    setUsuario((usuarioActual) => {
+      const usuarioBase = usuarioActual || {};
+
+      const usuarioActualizado = {
+        ...usuarioBase,
+        ...datosActualizados,
+      };
+
+      localStorage.setItem(
+        "tdea_go_usuario",
+        JSON.stringify(usuarioActualizado)
+      );
+
+      return usuarioActualizado;
+    });
   };
-
-  const navegarMenuMovil = (ruta) => {
-    setMostrarMenuMovil(false);
-    navegarA(ruta);
-  };
-
-  // =========================================================
-  // ACTUALIZAR USUARIO
-  // =========================================================
-
-  const actualizarUsuario = (datosActualizados) => {
-    if (!datosActualizados) return;
-
-    const usuarioActualizado = {
-      ...(usuario || {}),
-      ...datosActualizados,
-    };
-
-    setUsuario(usuarioActualizado);
-
-    localStorage.setItem(
-      "tdea_go_usuario",
-      JSON.stringify(usuarioActualizado)
-    );
-  };
-
-  // =========================================================
-  // INICIO DE SESIÓN
-  // =========================================================
 
   const manejarLoginExitoso = (datosUsuario) => {
-    setUsuario(datosUsuario);
+    let usuarioFinal = { ...datosUsuario };
+
+    const registroPendiente = localStorage.getItem(
+      "tdea_go_registro_pendiente"
+    );
+
+    if (registroPendiente) {
+      try {
+        const pendiente = JSON.parse(registroPendiente);
+
+        const correoUsuario = (
+          usuarioFinal.correo ||
+          usuarioFinal.email ||
+          ""
+        ).toLowerCase();
+
+        const correoPendiente = (
+          pendiente.correo || ""
+        ).toLowerCase();
+
+        if (
+          pendiente.rol === "conductor" &&
+          correoUsuario &&
+          correoUsuario === correoPendiente &&
+          usuarioFinal.rol?.toLowerCase() !== "conductor"
+        ) {
+          usuarioFinal.rol_solicitado = "conductor";
+          usuarioFinal.requiere_vehiculo = true;
+        }
+      } catch {
+        localStorage.removeItem("tdea_go_registro_pendiente");
+      }
+    }
+
+    setUsuario(usuarioFinal);
 
     localStorage.setItem(
       "tdea_go_usuario",
-      JSON.stringify(datosUsuario)
+      JSON.stringify(usuarioFinal)
     );
 
     setMostrarLogin(false);
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
-    setMensajeConfirmacion("");
 
-    const rol = String(datosUsuario?.rol || "pasajero")
-      .trim()
-      .toLowerCase();
-
-    if (rol === "conductor") {
-      navegar("/mi-cuenta");
-    } else {
-      navegar("/mis-solicitudes");
-    }
+    navegar(
+      usuarioFinal.requiere_vehiculo
+        ? "/mi-cuenta"
+        : "/mis-solicitudes"
+    );
   };
-
-  // =========================================================
-  // CERRAR SESIÓN
-  // =========================================================
 
   const cerrarSesion = () => {
     localStorage.removeItem("tdea_go_usuario");
@@ -197,17 +252,14 @@ function Aplicacion() {
     navegar("/");
   };
 
-  // =========================================================
-  // CAMBIAR ROL ACTIVO
-  // =========================================================
-
   const cambiarRol = (nuevoRol) => {
-    if (!usuario) return;
+    if (!usuario) {
+      return;
+    }
 
     setMostrarMenuUsuario(false);
     setMostrarMenuMovil(false);
 
-    // Para ser conductor, primero debe registrar el vehículo.
     if (nuevoRol === "conductor") {
       navegar("/mi-cuenta");
       return;
@@ -216,36 +268,55 @@ function Aplicacion() {
     const usuarioActualizado = {
       ...usuario,
       rol: "pasajero",
+      rol_solicitado: "pasajero",
+      requiere_vehiculo: false,
     };
 
     actualizarUsuario(usuarioActualizado);
     navegar("/buscar");
   };
 
-  // =========================================================
-  // DATOS DEL USUARIO
-  // =========================================================
+  const irAlServicio = (ruta) => {
+    setMostrarMenuMovil(false);
+    setMostrarMenuUsuario(false);
 
-  const obtenerNombreUsuario = () => {
-    if (!usuario) return "Usuario";
+    if (!usuario) {
+      setMostrarLogin(true);
+      return;
+    }
 
-    return (
-      usuario.nombre_completo ||
-      usuario.nombre ||
-      "Usuario"
-    );
+    if (requiereRegistroVehiculo) {
+      navegar("/mi-cuenta");
+      return;
+    }
+
+    navegar(ruta);
   };
 
-  const obtenerRolUsuario = () =>
-    String(usuario?.rol || "").toLowerCase();
+  const navegarMenuMovil = (ruta) => {
+    setMostrarMenuMovil(false);
+    setMostrarMenuUsuario(false);
+    navegar(ruta);
+  };
+
+  const obtenerNombreUsuario = () => {
+    if (!usuario) {
+      return "Usuario";
+    }
+
+    return usuario.nombre_completo || usuario.nombre || "Usuario";
+  };
+
+  const obtenerRolUsuario = () => {
+    return usuario?.rol?.toLowerCase() || "";
+  };
 
   const esConductor = obtenerRolUsuario() === "conductor";
   const esPasajero = obtenerRolUsuario() === "pasajero";
-  const fotoUsuario = usuario?.foto_url || null;
 
+  const fotoUsuario = usuario?.foto_url || null;
   return (
     <div className="app">
-      {/* ENCABEZADO */}
       <header className="encabezado">
         <div className="contenedor encabezado-contenido">
           <Link
@@ -259,17 +330,20 @@ function Aplicacion() {
             <span className="marca-tdea-principal" translate="no">
               TdeA
             </span>
+
             <span className="marca-go" translate="no">
               GO
             </span>
           </Link>
 
-          {/* NAVEGACIÓN DE ESCRITORIO */}
           <nav className="navegacion-principal">
             <Link
               to="/"
               className="enlace-navegacion"
-              onClick={() => setMostrarMenuUsuario(false)}
+              onClick={() => {
+                setMostrarMenuUsuario(false);
+                setMostrarMenuMovil(false);
+              }}
             >
               Inicio
             </Link>
@@ -311,14 +385,16 @@ function Aplicacion() {
             {usuario && (
               <button
                 className="enlace-navegacion boton-navegacion"
-                onClick={() => navegarA("/mi-cuenta")}
+                onClick={() => {
+                  setMostrarMenuUsuario(false);
+                  navegar("/mi-cuenta");
+                }}
               >
                 Mi cuenta
               </button>
             )}
           </nav>
 
-          {/* MENÚ MÓVIL */}
           <div className="menu-movil">
             <button
               className="boton-menu-movil"
@@ -329,6 +405,7 @@ function Aplicacion() {
               <span className="icono-menu-movil">
                 {mostrarMenuMovil ? "×" : "☰"}
               </span>
+
               <span>Menú</span>
             </button>
 
@@ -399,7 +476,6 @@ function Aplicacion() {
             )}
           </div>
 
-          {/* ACCIONES DEL ENCABEZADO */}
           <div className="acciones-encabezado">
             {usuario ? (
               <div
@@ -424,6 +500,7 @@ function Aplicacion() {
                             "No fue posible cargar la foto del encabezado:",
                             fotoUsuario
                           );
+
                           evento.currentTarget.style.display = "none";
                         }}
                       />
@@ -445,6 +522,7 @@ function Aplicacion() {
                   <div className="menu-usuario">
                     <div className="menu-usuario-cabecera">
                       <strong>{obtenerNombreUsuario()}</strong>
+
                       <span className="rol-actual">
                         {esConductor ? "Conductor" : "Pasajero"}
                       </span>
@@ -452,7 +530,10 @@ function Aplicacion() {
 
                     <button
                       className="opcion-menu-usuario"
-                      onClick={() => navegarA("/mi-cuenta")}
+                      onClick={() => {
+                        setMostrarMenuUsuario(false);
+                        navegar("/mi-cuenta");
+                      }}
                     >
                       Mi cuenta
                     </button>
@@ -463,9 +544,12 @@ function Aplicacion() {
                         onClick={() => cambiarRol("conductor")}
                       >
                         <span className="icono-opcion">C</span>
+
                         <span>
                           <strong>Quiero ser conductor</strong>
-                          <small>Publica tus propias rutas</small>
+                          <small>
+                            Registra tu vehículo para publicar rutas
+                          </small>
                         </span>
                       </button>
                     )}
@@ -476,6 +560,7 @@ function Aplicacion() {
                         onClick={() => cambiarRol("pasajero")}
                       >
                         <span className="icono-opcion">P</span>
+
                         <span>
                           <strong>Quiero ser pasajero</strong>
                           <small>Busca una ruta disponible</small>
@@ -505,58 +590,45 @@ function Aplicacion() {
           </div>
         </div>
       </header>
-
-      {/* AVISO DE CONFIRMACIÓN DEL CORREO */}
-      {mensajeConfirmacion && (
-        <div
-          role="status"
-          style={{
-            maxWidth: "1100px",
-            margin: "16px auto",
-            padding: "14px 18px",
-            border: "1px solid #86c99a",
-            borderRadius: "10px",
-            backgroundColor: "#edf9f0",
-            color: "#205c32",
-            lineHeight: 1.5,
-          }}
-        >
-          <strong>Confirmación completada</strong>
-          <p style={{ margin: "4px 0 0" }}>
-            {mensajeConfirmacion}
-          </p>
-        </div>
-      )}
-
-      {/* CONTENIDO PRINCIPAL */}
       <main>
         <Routes>
           <Route
             path="/"
             element={
-              <Inicio
-                usuario={usuario}
-                irAlServicio={irAlServicio}
-                abrirLogin={() => setMostrarLogin(true)}
-              />
+              requiereRegistroVehiculo ? (
+                <Navigate to="/mi-cuenta" replace />
+              ) : (
+                <Inicio
+                  usuario={usuario}
+                  irAlServicio={irAlServicio}
+                  abrirLogin={() => setMostrarLogin(true)}
+                />
+              )
             }
           />
 
           <Route
             path="/buscar"
             element={
-              <BuscarRuta
-                usuario={usuario}
-                API_URL={API_URL}
-                abrirLogin={() => setMostrarLogin(true)}
-              />
+              requiereRegistroVehiculo ? (
+                <Navigate to="/mi-cuenta" replace />
+              ) : (
+                <BuscarRuta
+                  usuario={usuario}
+                  API_URL={API_URL}
+                  abrirLogin={() => setMostrarLogin(true)}
+                />
+              )
             }
           />
 
           <Route
             path="/publicar"
             element={
-              <RutaSoloConductor usuario={usuario}>
+              <RutaSoloConductor
+                usuario={usuario}
+                requiereRegistroVehiculo={requiereRegistroVehiculo}
+              >
                 <PublicarRuta
                   usuario={usuario}
                   API_URL={API_URL}
@@ -586,10 +658,14 @@ function Aplicacion() {
             path="/mis-solicitudes"
             element={
               usuario ? (
-                <MisSolicitudes
-                  usuario={usuario}
-                  API_URL={API_URL}
-                />
+                requiereRegistroVehiculo ? (
+                  <Navigate to="/mi-cuenta" replace />
+                ) : (
+                  <MisSolicitudes
+                    usuario={usuario}
+                    API_URL={API_URL}
+                  />
+                )
               ) : (
                 <Navigate to="/" replace />
               )
@@ -599,7 +675,10 @@ function Aplicacion() {
           <Route
             path="/mis-rutas"
             element={
-              <RutaSoloConductor usuario={usuario}>
+              <RutaSoloConductor
+                usuario={usuario}
+                requiereRegistroVehiculo={requiereRegistroVehiculo}
+              >
                 <MisRutas
                   usuario={usuario}
                   API_URL={API_URL}
@@ -609,15 +688,17 @@ function Aplicacion() {
           />
         </Routes>
       </main>
-
-      {/* PIE DE PÁGINA */}
       <footer className="pie-pagina">
         <div className="contenedor pie-contenido">
           <div>
             <div className="marca-tdea marca-footer">
-              <span className="marca-tdea-principal" translate="no">
+              <span
+                className="marca-tdea-principal"
+                translate="no"
+              >
                 TdeA
               </span>
+
               <span className="marca-go" translate="no">
                 GO
               </span>
@@ -634,7 +715,6 @@ function Aplicacion() {
         </div>
       </footer>
 
-      {/* MODAL DE INICIO DE SESIÓN */}
       {mostrarLogin && (
         <div
           className="modal-overlay"

@@ -126,8 +126,6 @@ app.get("/", (req, res) => {
 // POST /api/usuarios
 // ------------------------------------------------------------------
 
-
-
 app.post("/api/usuarios", async (req, res) => {
   const {
     nombre,
@@ -139,21 +137,15 @@ app.post("/api/usuarios", async (req, res) => {
   } = req.body;
 
   if (
-    !nombre?.trim() ||
-    !apellido?.trim() ||
-    !correo?.trim() ||
-    !telefono?.trim() ||
+    !nombre ||
+    !apellido ||
+    !correo ||
+    !telefono ||
     !contrasena
   ) {
     return res.status(400).json({
       mensaje:
         "Completa todos los campos obligatorios para crear tu cuenta.",
-    });
-  }
-
-  if (contrasena.length < 6) {
-    return res.status(400).json({
-      mensaje: "La contraseña debe tener mínimo 6 caracteres.",
     });
   }
 
@@ -169,139 +161,87 @@ app.post("/api/usuarios", async (req, res) => {
     });
   }
 
-  // Validar el rol seleccionado.
-  const rolUsuario = String(rol || "pasajero")
-    .trim()
-    .toLowerCase();
-
-  if (!["conductor", "pasajero"].includes(rolUsuario)) {
-    return res.status(400).json({
-      mensaje: "El tipo de usuario seleccionado no es válido.",
-    });
-  }
-
   try {
     const nombreCompleto =
       `${nombre.trim()} ${apellido.trim()}`;
 
-    const telefonoNormalizado = telefono.trim();
+    // El perfil comienza como pasajero hasta que se registre
+    // un vehículo. Se conserva la elección original.
+    const rolSolicitado =
+      rol === "conductor" ? "conductor" : "pasajero";
 
-    // URL de la Web App publicada.
-    // Se puede configurar FRONTEND_URL en Render.
-    const frontendUrl = (
-      process.env.FRONTEND_URL ||
-      "https://tdea-go.vercel.app"
-    ).replace(/\/+$/, "");
+    const rolUsuario = "pasajero";
 
-    const urlConfirmacion =
-      `${frontendUrl}/?confirmacion=exitosa`;
-
+    // Registrar usuario en Supabase Auth.
     const { data: authData, error: authError } =
       await supabase.auth.signUp({
         email: correoNormalizado,
         password: contrasena,
         options: {
-          emailRedirectTo: urlConfirmacion,
           data: {
             nombre_completo: nombreCompleto,
-            telefono: telefonoNormalizado,
+            telefono: telefono.trim(),
             rol: rolUsuario,
+            rol_solicitado: rolSolicitado,
           },
         },
       });
 
     if (authError) {
-      console.error(
-        "Error creando usuario en Supabase Auth:",
-        {
-          message: authError.message,
-          status: authError.status,
-          code: authError.code,
-        }
-      );
-
       return res.status(400).json({
         mensaje:
           authError.message ||
           "Error al crear la cuenta en Supabase.",
-        codigo: authError.code || null,
       });
     }
 
     const userId = authData.user?.id;
 
-    if (!userId) {
-      return res.status(500).json({
-        mensaje:
-          "Supabase no devolvió el identificador del usuario. No se pudo completar el registro.",
-      });
+    if (userId) {
+      const { error: perfilError } =
+        await dbClient.from("profiles").upsert(
+          [
+            {
+              id: userId,
+              nombre_completo: nombreCompleto,
+              correo: correoNormalizado,
+              telefono: telefono.trim(),
+              rol: rolUsuario,
+              verificado: false,
+              foto_url: null,
+              creado_en: new Date().toISOString(),
+            },
+          ],
+          { onConflict: "id" }
+        );
+
+      if (perfilError) {
+        console.error(
+          "Error guardando perfil:",
+          perfilError
+        );
+      }
     }
-
-    // Guardar el rol elegido en el perfil.
-    const { error: perfilError } = await dbClient
-      .from("profiles")
-      .upsert(
-        {
-          id: userId,
-          nombre_completo: nombreCompleto,
-          correo: correoNormalizado,
-          telefono: telefonoNormalizado,
-          rol: rolUsuario,
-          verificado: false,
-          foto_url: null,
-          creado_en: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
-
-    if (perfilError) {
-      console.error(
-        "Error guardando perfil en profiles:",
-        {
-          message: perfilError.message,
-          code: perfilError.code,
-          details: perfilError.details,
-          hint: perfilError.hint,
-        }
-      );
-
-      return res.status(500).json({
-        mensaje:
-          "La cuenta se creó, pero no se pudo guardar el perfil.",
-        detalle: perfilError.message,
-        codigo: perfilError.code || null,
-        usuarioCreado: true,
-        usuarioId: userId,
-      });
-    }
-
-    const mensajeRol =
-      rolUsuario === "conductor"
-        ? "Después de confirmar tu correo e iniciar sesión, podrás continuar con el registro de tu vehículo."
-        : "Después de confirmar tu correo, podrás iniciar sesión y utilizar TdeA GO.";
 
     return res.status(201).json({
       mensaje:
-        "Cuenta creada correctamente. Revisa tu correo institucional y confirma tu dirección para activar tu cuenta. " +
-        mensajeRol,
+        "Cuenta creada correctamente. Te hemos enviado un correo de confirmación a tu bandeja institucional para que actives tu cuenta.",
       usuario: {
         id: userId,
         nombre_completo: nombreCompleto,
         correo: correoNormalizado,
         rol: rolUsuario,
+        rol_solicitado: rolSolicitado,
+        requiere_vehiculo:
+          rolSolicitado === "conductor",
       },
     });
   } catch (error) {
-    console.error(
-      "Error inesperado en /api/usuarios:",
-      error
-    );
+    console.error("Error en /api/usuarios:", error);
 
     return res.status(500).json({
       mensaje:
         "Error interno del servidor al procesar el registro.",
-      detalle: error.message || "Error desconocido.",
-      codigo: error.code || null,
     });
   }
 });
@@ -327,7 +267,6 @@ app.post("/api/login", async (req, res) => {
         email: correo.trim(),
         password: contrasena,
       });
-
     if (authError) {
       return res.status(401).json({
         mensaje: "Correo o contraseña incorrectos.",
@@ -353,11 +292,9 @@ app.post("/api/login", async (req, res) => {
 
       const nuevoPerfil = {
         id: user.id,
-        nombre_completo:
-          meta.nombre_completo || "Usuario TdeA",
+        nombre_completo: meta.nombre_completo || "Usuario TdeA",
         correo: user.email,
         telefono: meta.telefono || "",
-        // No usar los metadatos para asignar el rol de conductor.
         rol: "pasajero",
         verificado: false,
         foto_url: null,
@@ -388,10 +325,79 @@ app.post("/api/login", async (req, res) => {
       profile = perfilCreado;
     }
 
+    const meta = user.user_metadata || {};
+
+    const rolSolicitado =
+      meta.rol_solicitado === "conductor"
+        ? "conductor"
+        : profile.rol;
+
+    const {
+      data: vehiculo,
+      error: errorVehiculo,
+    } = await dbClient
+      .from("vehiculos")
+      .select("id")
+      .eq("usuario_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (errorVehiculo) {
+      console.error(
+        "Error comprobando vehículo al iniciar sesión:",
+        errorVehiculo
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "No fue posible comprobar si tienes un vehículo registrado.",
+      });
+    }
+
+    if (
+      rolSolicitado === "conductor" &&
+      vehiculo &&
+      profile.rol !== "conductor"
+    ) {
+      const {
+        data: perfilActualizado,
+        error: errorActualizacion,
+      } = await dbClient
+        .from("profiles")
+        .update({ rol: "conductor" })
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (errorActualizacion) {
+        console.error(
+          "Error activando conductor con vehículo existente:",
+          errorActualizacion
+        );
+
+        return res.status(500).json({
+          mensaje:
+            "El vehículo existe, pero no fue posible activar el rol de conductor.",
+        });
+      }
+
+      profile = perfilActualizado;
+    }
+
+    const requiereVehiculo =
+      (
+        rolSolicitado === "conductor" ||
+        profile.rol === "conductor"
+      ) && !vehiculo;
+
     return res.status(200).json({
       mensaje: "Inicio de sesión exitoso.",
       token: authData.session?.access_token,
-      usuario: profile,
+      usuario: {
+        ...profile,
+        rol_solicitado: rolSolicitado,
+        requiere_vehiculo: requiereVehiculo,
+      },
     });
   } catch (error) {
     console.error("Error en /api/login:", error);
@@ -447,15 +453,16 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
       });
     }
 
-    // Antes de asignar el rol de conductor, verificar que tenga vehículo.
     if (rol === "conductor") {
-      const { data: vehiculo, error: errorVehiculo } =
-        await dbClient
-          .from("vehiculos")
-          .select("id")
-          .eq("usuario_id", id)
-          .limit(1)
-          .maybeSingle();
+      const {
+        data: vehiculo,
+        error: errorVehiculo,
+      } = await dbClient
+        .from("vehiculos")
+        .select("id")
+        .eq("usuario_id", id)
+        .limit(1)
+        .maybeSingle();
 
       if (errorVehiculo) {
         console.error(
@@ -464,13 +471,15 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
         );
 
         return res.status(500).json({
-          mensaje: "No fue posible verificar el vehículo registrado. Inténtalo nuevamente.",
+          mensaje:
+            "No fue posible verificar el vehículo registrado. Inténtalo nuevamente.",
         });
       }
 
       if (!vehiculo) {
         return res.status(400).json({
-          mensaje: "Para ser conductor, primero debes registrar tu vehículo.",
+          mensaje:
+            "Para ser conductor, primero debes registrar tu vehículo.",
           requiereVehiculo: true,
         });
       }
@@ -499,7 +508,6 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
     });
   }
 });
-
 // ------------------------------------------------------------------
 // 6. SUBIR / CAMBIAR FOTO DE PERFIL
 // PUT /api/usuarios/:id/foto
@@ -537,8 +545,7 @@ app.put(
 
       if (!extension) {
         return res.status(400).json({
-          mensaje:
-            "El formato de imagen no es válido.",
+          mensaje: "El formato de imagen no es válido.",
         });
       }
 
@@ -557,10 +564,7 @@ app.put(
           });
 
       if (subidaError) {
-        console.error(
-          "Error subiendo foto:",
-          subidaError
-        );
+        console.error("Error subiendo foto:", subidaError);
 
         return res.status(500).json({
           mensaje:
@@ -575,15 +579,15 @@ app.put(
 
       const fotoUrl = urlData.publicUrl;
 
-      const { data, error: actualizacionError } =
-        await dbClient
-          .from("profiles")
-          .update({
-            foto_url: fotoUrl,
-          })
-          .eq("id", id)
-          .select()
-          .single();
+      const {
+        data,
+        error: actualizacionError,
+      } = await dbClient
+        .from("profiles")
+        .update({ foto_url: fotoUrl })
+        .eq("id", id)
+        .select()
+        .single();
 
       if (actualizacionError) {
         console.error(
@@ -602,14 +606,11 @@ app.put(
       }
 
       if (usuario.foto_url) {
-        await eliminarFotoAnterior(
-          usuario.foto_url
-        );
+        await eliminarFotoAnterior(usuario.foto_url);
       }
 
       return res.status(200).json({
-        mensaje:
-          "Foto de perfil actualizada correctamente.",
+        mensaje: "Foto de perfil actualizada correctamente.",
         usuario: {
           ...data,
           foto_url: fotoUrl,
@@ -650,35 +651,26 @@ app.delete(
       }
 
       if (usuario.foto_url) {
-        await eliminarFotoAnterior(
-          usuario.foto_url
-        );
+        await eliminarFotoAnterior(usuario.foto_url);
       }
 
-      const { data, error } =
-        await dbClient
-          .from("profiles")
-          .update({
-            foto_url: null,
-          })
-          .eq("id", id)
-          .select()
-          .single();
+      const { data, error } = await dbClient
+        .from("profiles")
+        .update({ foto_url: null })
+        .eq("id", id)
+        .select()
+        .single();
 
       if (error) {
         throw error;
       }
 
       return res.status(200).json({
-        mensaje:
-          "Foto de perfil eliminada correctamente.",
+        mensaje: "Foto de perfil eliminada correctamente.",
         usuario: data,
       });
     } catch (error) {
-      console.error(
-        "Error eliminando foto:",
-        error
-      );
+      console.error("Error eliminando foto:", error);
 
       return res.status(500).json({
         mensaje:
@@ -687,9 +679,8 @@ app.delete(
     }
   }
 );
-
 // ------------------------------------------------------------------
-// 8. CONSULTAR RUTAS DISPONIBLES (BUSCAR RUTA)
+// 8. CONSULTAR RUTAS DISPONIBLES
 // GET /api/rutas
 // ------------------------------------------------------------------
 
@@ -731,10 +722,13 @@ app.get("/api/rutas", async (req, res) => {
           capacidad_maxima
         )
       `)
-      .order("fecha_hora_salida", { ascending: true });
+      .order("fecha_hora_salida", {
+        ascending: true,
+      });
 
     if (error) {
       console.error("Error obteniendo rutas:", error);
+
       return res.status(500).json({
         mensaje: "No fue posible consultar las rutas.",
         detalle: error.message,
@@ -788,16 +782,68 @@ app.post("/api/rutas", async (req, res) => {
       cupos_totales,
       cupos,
       tarifa_contribucion,
-      tarifa
+      tarifa,
     } = req.body;
 
-    const idConductor = conductor_id || id_conductor || user_id;
-    const totalCupos = cupos_totales || cupos || 4;
-    const contribucion = tarifa_contribucion || tarifa || 0;
+    const idConductor =
+      conductor_id || id_conductor || user_id;
+
+    const totalCupos =
+      cupos_totales || cupos || 4;
+
+    const contribucion =
+      tarifa_contribucion || tarifa || 0;
 
     if (!idConductor || !origen || !destino) {
       return res.status(400).json({
-        mensaje: "Faltan campos obligatorios (conductor, origen o destino).",
+        mensaje:
+          "Faltan campos obligatorios (conductor, origen o destino).",
+      });
+    }
+
+    const {
+      data: perfilConductor,
+      error: errorPerfilConductor,
+    } = await dbClient
+      .from("profiles")
+      .select("id, rol")
+      .eq("id", idConductor)
+      .maybeSingle();
+
+    if (errorPerfilConductor) {
+      throw errorPerfilConductor;
+    }
+
+    if (
+      !perfilConductor ||
+      perfilConductor.rol !== "conductor"
+    ) {
+      return res.status(403).json({
+        mensaje:
+          "Debes completar el registro del vehículo y activar el rol de conductor antes de publicar rutas.",
+        requiereVehiculo: true,
+      });
+    }
+
+    const {
+      data: vehiculoConductor,
+      error: errorVehiculoConductor,
+    } = await dbClient
+      .from("vehiculos")
+      .select("id")
+      .eq("usuario_id", idConductor)
+      .limit(1)
+      .maybeSingle();
+
+    if (errorVehiculoConductor) {
+      throw errorVehiculoConductor;
+    }
+
+    if (!vehiculoConductor) {
+      return res.status(403).json({
+        mensaje:
+          "Registra tu vehículo antes de publicar una ruta.",
+        requiereVehiculo: true,
       });
     }
 
@@ -806,7 +852,9 @@ app.post("/api/rutas", async (req, res) => {
     if (!fechaHoraSalida && fecha && hora) {
       fechaHoraSalida = `${fecha}T${hora}:00`;
     } else if (!fechaHoraSalida) {
-      fechaHoraSalida = new Date(Date.now() + 86400000).toISOString();
+      fechaHoraSalida = new Date(
+        Date.now() + 86400000
+      ).toISOString();
     }
 
     const { data, error } = await dbClient
@@ -816,10 +864,22 @@ app.post("/api/rutas", async (req, res) => {
         conductor_id: idConductor,
         origen: String(origen).trim(),
         destino: String(destino).trim(),
-        lat_origen: lat_origen !== undefined ? Number(lat_origen) : null,
-        lng_origen: lng_origen !== undefined ? Number(lng_origen) : null,
-        lat_destino: lat_destino !== undefined ? Number(lat_destino) : null,
-        lng_destino: lng_destino !== undefined ? Number(lng_destino) : null,
+        lat_origen:
+          lat_origen !== undefined
+            ? Number(lat_origen)
+            : null,
+        lng_origen:
+          lng_origen !== undefined
+            ? Number(lng_origen)
+            : null,
+        lat_destino:
+          lat_destino !== undefined
+            ? Number(lat_destino)
+            : null,
+        lng_destino:
+          lng_destino !== undefined
+            ? Number(lng_destino)
+            : null,
         fecha_hora_salida: fechaHoraSalida,
         cupos_totales: Number(totalCupos),
         cupos_disponibles: Number(totalCupos),
@@ -831,6 +891,7 @@ app.post("/api/rutas", async (req, res) => {
 
     if (error) {
       console.error("Error publicando ruta:", error);
+
       return res.status(500).json({
         mensaje: "No fue posible publicar la ruta.",
         detalle: error.message,
@@ -842,14 +903,17 @@ app.post("/api/rutas", async (req, res) => {
       ruta: data,
     });
   } catch (error) {
-    console.error("Error detallado al publicar ruta:", error);
+    console.error(
+      "Error detallado al publicar ruta:",
+      error
+    );
+
     return res.status(500).json({
       mensaje: "No fue posible publicar la ruta.",
       detalles: error.message,
     });
   }
 });
-
 // ------------------------------------------------------------------
 // 10. RUTAS DE UN CONDUCTOR
 // GET /api/rutas/conductor/:id
@@ -884,23 +948,35 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
         creado_en
       `)
       .eq("conductor_id", id)
-      .order("fecha_hora_salida", { ascending: true });
+      .order("fecha_hora_salida", {
+        ascending: true,
+      });
 
     if (error) {
-      console.error("Error de Supabase en rutas de conductor:", error);
+      console.error(
+        "Error consultando rutas del conductor:",
+        error
+      );
+
       return res.status(500).json({
-        mensaje: "Error al consultar las rutas en la base de datos.",
+        mensaje:
+          "Error al consultar las rutas en la base de datos.",
       });
     }
 
     return res.status(200).json(data || []);
   } catch (error) {
-    console.error("Error crítico en /api/rutas/conductor/:id:", error);
+    console.error(
+      "Error en /api/rutas/conductor/:id:",
+      error
+    );
+
     return res.status(500).json({
       mensaje: "No fue posible consultar tus rutas.",
     });
   }
 });
+
 // ------------------------------------------------------------------
 // 11. SOLICITAR CUPO
 // POST /api/solicitudes
@@ -964,7 +1040,8 @@ app.post("/api/solicitudes", async (req, res) => {
 
     if (existente.data) {
       return res.status(409).json({
-        mensaje: "Ya tienes una solicitud para esta ruta.",
+        mensaje:
+          "Ya tienes una solicitud para esta ruta.",
       });
     }
 
@@ -1003,38 +1080,44 @@ app.post("/api/solicitudes", async (req, res) => {
 // GET /api/solicitudes/pasajero/:id
 // ------------------------------------------------------------------
 
-app.get("/api/solicitudes/pasajero/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+app.get(
+  "/api/solicitudes/pasajero/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    const { data, error } = await dbClient
-      .from("solicitudes_viaje")
-      .select(`
-        id,
-        viaje_id,
-        pasajero_id,
-        punto_encuentro,
-        estado,
-        fecha_solicitud
-      `)
-      .eq("pasajero_id", id)
-      .order("fecha_solicitud", {
-        ascending: false,
+      const { data, error } = await dbClient
+        .from("solicitudes_viaje")
+        .select(`
+          id,
+          viaje_id,
+          pasajero_id,
+          punto_encuentro,
+          estado,
+          fecha_solicitud
+        `)
+        .eq("pasajero_id", id)
+        .order("fecha_solicitud", {
+          ascending: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      res.json(data || []);
+    } catch (error) {
+      console.error(
+        "Error obteniendo solicitudes:",
+        error
+      );
+
+      res.status(500).json({
+        mensaje: "No fue posible consultar tus solicitudes.",
       });
-
-    if (error) {
-      throw error;
     }
-
-    res.json(data || []);
-  } catch (error) {
-    console.error("Error obteniendo solicitudes:", error);
-
-    res.status(500).json({
-      mensaje: "No fue posible consultar tus solicitudes.",
-    });
   }
-});
+);
 
 // ------------------------------------------------------------------
 // MANEJO DE ERRORES DE MULTER
@@ -1055,7 +1138,8 @@ app.use((error, req, res, next) => {
 
   if (
     error &&
-    error.message === "Solo se permiten imágenes JPG, PNG o WEBP."
+    error.message ===
+    "Solo se permiten imágenes JPG, PNG o WEBP."
   ) {
     return res.status(400).json({
       mensaje: error.message,
@@ -1070,7 +1154,6 @@ app.use((error, req, res, next) => {
 // POST /api/vehiculos
 // ------------------------------------------------------------------
 
-
 app.post("/api/vehiculos", async (req, res) => {
   try {
     const {
@@ -1082,15 +1165,12 @@ app.post("/api/vehiculos", async (req, res) => {
       capacidad_maxima,
     } = req.body;
 
-    const capacidad = Number(capacidad_maxima);
-
     if (
       !conductor_id ||
       !marca_modelo?.trim() ||
       !placa?.trim() ||
-      !capacidad_maxima ||
-      !Number.isInteger(capacidad) ||
-      capacidad < 1
+      !Number.isInteger(Number(capacidad_maxima)) ||
+      Number(capacidad_maxima) < 1
     ) {
       return res.status(400).json({
         mensaje:
@@ -1098,23 +1178,25 @@ app.post("/api/vehiculos", async (req, res) => {
       });
     }
 
-    const vehiculo = {
-      usuario_id: conductor_id,
-      tipo: tipo?.trim() || "Automóvil",
-      marca_modelo: marca_modelo.trim(),
-      placa: placa.trim().toUpperCase(),
-      color: color?.trim() || null,
-      capacidad_maxima: capacidad,
-    };
-
     const { data, error } = await dbClient
       .from("vehiculos")
-      .upsert([vehiculo], { onConflict: "usuario_id" })
+      .upsert(
+        [
+          {
+            usuario_id: conductor_id,
+            tipo: tipo ? tipo.trim() : "Automóvil",
+            marca_modelo: marca_modelo.trim(),
+            placa: placa.trim().toUpperCase(),
+            color: color ? String(color).trim() : null,
+            capacidad_maxima: Number(capacidad_maxima),
+          },
+        ],
+        { onConflict: "usuario_id" }
+      )
       .select()
       .single();
 
     if (error) {
-      console.error("Error guardando vehículo:", error);
       throw error;
     }
 
@@ -1131,7 +1213,6 @@ app.post("/api/vehiculos", async (req, res) => {
     });
   }
 });
-
 
 // ------------------------------------------------------------------
 // 14. INICIO DEL SERVIDOR

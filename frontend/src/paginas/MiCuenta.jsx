@@ -100,36 +100,70 @@ function MiCuenta({
     )
     .join("");
 
+  // =========================================================
+  // REGISTRO DEL VEHÍCULO Y ACTIVACIÓN DEL ROL
+  // =========================================================
+
   const manejarVehiculoRegistrado = async () => {
     setMensajeRol("");
     setErrorRol("");
 
-    // Si ya es conductor, el registro/actualización del vehículo termina aquí.
+    // Si ya es conductor, basta con actualizar el vehículo.
     if (esConductor) {
-      setMensajeRol("Tu vehículo quedó registrado o actualizado correctamente.");
+      localStorage.removeItem(
+        "tdea_go_registro_pendiente"
+      );
+
+      if (actualizarUsuario) {
+        actualizarUsuario({
+          ...usuario,
+          rol: "conductor",
+          rol_solicitado: "conductor",
+          requiere_vehiculo: false,
+        });
+      }
+
+      setMensajeRol(
+        "Tu vehículo quedó registrado o actualizado correctamente."
+      );
+
       return;
     }
 
     if (!idUsuario) {
-      setErrorRol("No pudimos identificar tu cuenta. Cierra sesión e inicia sesión nuevamente.");
+      setErrorRol(
+        "No pudimos identificar tu cuenta. Cierra sesión e inicia sesión nuevamente."
+      );
+
       return;
     }
 
     try {
       setCambiandoRol(true);
-      setMensajeRol("Vehículo registrado. Estamos activando tu perfil de conductor...");
 
-      const respuesta = await fetch(`${API_URL}/api/usuarios/${idUsuario}/rol`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rol: "conductor" }),
-      });
+      setMensajeRol(
+        "Vehículo registrado. Estamos activando tu perfil de conductor..."
+      );
+
+      const respuesta = await fetch(
+        `${API_URL}/api/usuarios/${idUsuario}/rol`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rol: "conductor",
+          }),
+        }
+      );
 
       const datos = await respuesta.json();
 
       if (!respuesta.ok) {
         throw new Error(
-          datos.mensaje || "El vehículo se registró, pero no pudimos activar el rol de conductor. Inténtalo nuevamente."
+          datos.mensaje ||
+          "El vehículo se registró, pero no pudimos activar el rol de conductor. Inténtalo nuevamente."
         );
       }
 
@@ -138,33 +172,54 @@ function MiCuenta({
           ...usuario,
           ...(datos.usuario || {}),
           rol: "conductor",
+          rol_solicitado: "conductor",
+          requiere_vehiculo: false,
         });
       }
 
+      localStorage.removeItem(
+        "tdea_go_registro_pendiente"
+      );
+
       setErrorRol("");
-      setMensajeRol("¡Listo! Tu vehículo quedó registrado y ahora tienes el rol de conductor.");
+
+      setMensajeRol(
+        "¡Listo! Tu vehículo quedó registrado y ahora tienes el rol de conductor."
+      );
     } catch (error) {
-      console.error("Error activando el rol de conductor:", error);
+      console.error(
+        "Error activando el rol de conductor:",
+        error
+      );
+
       setMensajeRol("");
-      setErrorRol(error.message || "No pudimos activar el rol de conductor.");
+
+      setErrorRol(
+        error.message ||
+        "No pudimos activar el rol de conductor."
+      );
     } finally {
       setCambiandoRol(false);
     }
   };
 
-  /*
-   * La vista previa tiene prioridad mientras
-   * todavía no se ha guardado la nueva fotografía.
-   */
+  // =========================================================
+  // FOTO ACTUAL DEL USUARIO
+  // =========================================================
+
   const fotoActual =
     vistaPrevia ||
     usuario.foto_url ||
     null;
-    console.log("FOTO ACTUAL EN MI CUENTA:", fotoActual);
 
-  /* ========================================================
-     DETENER CÁMARA
-     ======================================================== */
+  console.log(
+    "FOTO ACTUAL EN MI CUENTA:",
+    fotoActual
+  );
+
+  // =========================================================
+  // DETENER CÁMARA
+  // =========================================================
 
   function detenerCamara() {
     if (flujoCamaraRef.current) {
@@ -180,9 +235,9 @@ function MiCuenta({
     }
   }
 
-  /* ========================================================
-     ABRIR MENÚ DE FOTO
-     ======================================================== */
+  // =========================================================
+  // ABRIR MENÚ DE FOTO
+  // =========================================================
 
   const alternarOpcionesFoto = () => {
     setErrorFoto("");
@@ -193,9 +248,9 @@ function MiCuenta({
     );
   };
 
-  /* ========================================================
-     ABRIR CÁMARA
-     ======================================================== */
+  // =========================================================
+  // ABRIR CÁMARA
+  // =========================================================
 
   const abrirCamara = async () => {
     setMostrarOpcionesFoto(false);
@@ -223,109 +278,59 @@ function MiCuenta({
         });
 
       flujoCamaraRef.current = flujo;
-
       setMostrarCamara(true);
 
-      /*
-       * Esperamos a que el elemento de video
-       * exista antes de asignarle la cámara.
-       */
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = flujo;
-
-          videoRef.current
-            .play()
-            .catch((error) => {
-              console.error(
-                "No fue posible iniciar la vista de cámara:",
-                error
-              );
-            });
+          videoRef.current.play().catch((error) => {
+            console.error(
+              "No se pudo iniciar la cámara:",
+              error
+            );
+          });
         }
       }, 100);
     } catch (error) {
-      console.error(
-        "Error al acceder a la cámara:",
-        error
+      console.error("Error al abrir la cámara:", error);
+
+      setErrorFoto(
+        "No pudimos acceder a la cámara. Verifica los permisos del navegador."
       );
 
-      if (
-        error.name === "NotAllowedError" ||
-        error.name === "PermissionDeniedError"
-      ) {
-        setErrorFoto(
-          "No se permitió el acceso a la cámara. Debes autorizarla desde el navegador para tomar una foto."
-        );
-      } else if (
-        error.name === "NotFoundError"
-      ) {
-        setErrorFoto(
-          "No se encontró una cámara disponible en este dispositivo."
-        );
-      } else if (
-        error.name === "NotReadableError"
-      ) {
-        setErrorFoto(
-          "La cámara está siendo utilizada por otra aplicación."
-        );
-      } else {
-        setErrorFoto(
-          "No fue posible abrir la cámara."
-        );
-      }
+      detenerCamara();
+      setMostrarCamara(false);
     }
   };
+  // =========================================================
+  // CAPTURAR FOTO DESDE LA CÁMARA
+  // =========================================================
 
-  /* ========================================================
-     CERRAR CÁMARA
-     ======================================================== */
-
-  const cerrarCamara = () => {
-    detenerCamara();
-    setMostrarCamara(false);
-  };
-
-  /* ========================================================
-     TOMAR FOTO CON LA CÁMARA
-     ======================================================== */
-
-  const tomarFoto = () => {
+  const capturarFoto = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
     if (!video || !canvas) {
       setErrorFoto(
-        "No fue posible acceder a la cámara."
+        "No fue posible preparar la captura de la imagen."
       );
-
       return;
     }
 
-    if (
-      video.videoWidth === 0 ||
-      video.videoHeight === 0
-    ) {
+    if (!video.videoWidth || !video.videoHeight) {
       setErrorFoto(
-        "La cámara todavía no está lista. Espera un momento e inténtalo nuevamente."
+        "La cámara todavía no está lista. Inténtalo nuevamente."
       );
-
       return;
     }
+
+    const contexto = canvas.getContext("2d");
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    const contexto =
-      canvas.getContext("2d");
-
-    if (!contexto) {
-      setErrorFoto(
-        "No fue posible procesar la imagen."
-      );
-
-      return;
-    }
+    contexto.translate(canvas.width, 0);
+    contexto.scale(-1, 1);
 
     contexto.drawImage(
       video,
@@ -336,38 +341,55 @@ function MiCuenta({
     );
 
     canvas.toBlob(
-      (imagen) => {
-        if (!imagen) {
+      (blob) => {
+        if (!blob) {
           setErrorFoto(
-            "No fue posible crear la fotografía."
+            "No pudimos generar la imagen capturada."
           );
-
           return;
         }
 
-        const archivo =
-          new File(
-            [imagen],
-            `foto-perfil-${Date.now()}.jpg`,
-            {
-              type: "image/jpeg",
-            }
-          );
+        const archivo = new File(
+          [blob],
+          `foto-perfil-${Date.now()}.jpg`,
+          {
+            type: "image/jpeg",
+          }
+        );
 
-        procesarFoto(archivo);
+        if (vistaPrevia) {
+          URL.revokeObjectURL(vistaPrevia);
+        }
 
-        cerrarCamara();
+        setFotoSeleccionada(archivo);
+        setVistaPrevia(URL.createObjectURL(archivo));
+
+        detenerCamara();
+        setMostrarCamara(false);
+        setMensajeFoto(
+          "Foto capturada. Recuerda guardar los cambios."
+        );
+        setErrorFoto("");
       },
       "image/jpeg",
       0.9
     );
   };
 
-  /* ========================================================
-     ELEGIR FOTO DESDE EL DISPOSITIVO
-     ======================================================== */
+  // =========================================================
+  // CANCELAR CÁMARA
+  // =========================================================
 
-  const abrirArchivos = () => {
+  const cancelarCamara = () => {
+    detenerCamara();
+    setMostrarCamara(false);
+  };
+
+  // =========================================================
+  // SELECCIONAR FOTO DEL EQUIPO
+  // =========================================================
+
+  const abrirSelectorArchivo = () => {
     setMostrarOpcionesFoto(false);
     setErrorFoto("");
     setMensajeFoto("");
@@ -375,17 +397,12 @@ function MiCuenta({
     inputArchivoRef.current?.click();
   };
 
-  /* ========================================================
-     PROCESAR FOTO SELECCIONADA
-     ======================================================== */
+  const manejarArchivoSeleccionado = (evento) => {
+    const archivo = evento.target.files?.[0];
 
-  const procesarFoto = (archivo) => {
     if (!archivo) {
       return;
     }
-
-    setMensajeFoto("");
-    setErrorFoto("");
 
     const tiposPermitidos = [
       "image/jpeg",
@@ -393,24 +410,21 @@ function MiCuenta({
       "image/webp",
     ];
 
-    if (
-      !tiposPermitidos.includes(archivo.type)
-    ) {
+    if (!tiposPermitidos.includes(archivo.type)) {
       setErrorFoto(
-        "Solo se permiten imágenes JPG, PNG o WEBP."
+        "Selecciona una imagen JPG, PNG o WEBP."
       );
 
+      evento.target.value = "";
       return;
     }
 
-    const tamanioMaximo =
-      5 * 1024 * 1024;
-
-    if (archivo.size > tamanioMaximo) {
+    if (archivo.size > 5 * 1024 * 1024) {
       setErrorFoto(
         "La imagen no puede superar los 5 MB."
       );
 
+      evento.target.value = "";
       return;
     }
 
@@ -418,90 +432,55 @@ function MiCuenta({
       URL.revokeObjectURL(vistaPrevia);
     }
 
-    const nuevaVistaPrevia =
-      URL.createObjectURL(archivo);
-
     setFotoSeleccionada(archivo);
-    setVistaPrevia(nuevaVistaPrevia);
-  };
+    setVistaPrevia(URL.createObjectURL(archivo));
+    setMensajeFoto(
+      "Imagen seleccionada. Pulsa Guardar foto para actualizar tu perfil."
+    );
+    setErrorFoto("");
+    setMostrarOpcionesFoto(false);
 
-  /* ========================================================
-     CAMBIO DESDE EXPLORADOR
-     ======================================================== */
-
-  const seleccionarFoto = (evento) => {
-    const archivo =
-      evento.target.files?.[0];
-
-    if (!archivo) {
-      return;
-    }
-
-    procesarFoto(archivo);
-
+    // Permitir seleccionar el mismo archivo otra vez.
     evento.target.value = "";
   };
 
-  /* ========================================================
-     CANCELAR CAMBIO DE FOTO
-     ======================================================== */
-
-  const cancelarCambioFoto = () => {
-    detenerCamara();
-
-    setMostrarCamara(false);
-    setMostrarOpcionesFoto(false);
-
-    if (vistaPrevia) {
-      URL.revokeObjectURL(vistaPrevia);
-    }
-
-    setFotoSeleccionada(null);
-    setVistaPrevia(null);
-
-    setMensajeFoto("");
-    setErrorFoto("");
-  };
-
-  /* ========================================================
-     GUARDAR FOTO
-     ======================================================== */
+  // =========================================================
+  // GUARDAR FOTO EN EL BACKEND
+  // =========================================================
 
   const guardarFoto = async () => {
     if (!fotoSeleccionada) {
+      setErrorFoto(
+        "Primero selecciona o captura una imagen."
+      );
       return;
     }
 
     if (!idUsuario) {
       setErrorFoto(
-        "No fue posible identificar el usuario."
+        "No pudimos identificar tu cuenta. Inicia sesión nuevamente."
       );
-
       return;
     }
 
-    setGuardandoFoto(true);
-    setMensajeFoto("");
-    setErrorFoto("");
-
     try {
-      const datosFoto = new FormData();
+      setGuardandoFoto(true);
+      setErrorFoto("");
+      setMensajeFoto("");
 
-      datosFoto.append(
-        "foto",
-        fotoSeleccionada
-      );
+      const formulario = new FormData();
+
+      formulario.append("foto", fotoSeleccionada);
 
       const respuesta = await fetch(
         `${API_URL}/api/usuarios/${idUsuario}/foto`,
         {
           method: "PUT",
-          body: datosFoto,
+          body: formulario,
         }
       );
 
-      const datos =
-        await respuesta.json();
+      const datos = await respuesta.json();
 
       if (!respuesta.ok) {
         throw new Error(
@@ -510,26 +489,21 @@ function MiCuenta({
         );
       }
 
-      /*
-       * Verificamos que el backend haya devuelto
-       * correctamente la información del usuario.
-       */
-      if (!datos.usuario) {
+      const fotoGuardada =
+        datos.usuario?.foto_url ||
+        datos.foto_url;
+
+      if (!fotoGuardada) {
         throw new Error(
-          "La foto fue guardada, pero el servidor no devolvió la información actualizada del usuario."
+          "El servidor no devolvió la dirección de la foto guardada."
         );
       }
 
-      /*
-       * Actualizamos el usuario conservando
-       * todos los datos actuales y reemplazando
-       * específicamente la foto.
-       */
       if (actualizarUsuario) {
         actualizarUsuario({
           ...usuario,
-          ...datos.usuario,
-          foto_url: datos.usuario.foto_url || null,
+          ...(datos.usuario || {}),
+          foto_url: fotoGuardada,
         });
       }
 
@@ -539,60 +513,66 @@ function MiCuenta({
 
       setFotoSeleccionada(null);
       setVistaPrevia(null);
-
       setMensajeFoto(
-        "Foto de perfil actualizada correctamente."
+        "Tu foto de perfil se actualizó correctamente."
       );
-
-      setMostrarOpcionesFoto(false);
+      setErrorFoto("");
     } catch (error) {
       console.error(
-        "Error al guardar la foto:",
+        "Error guardando la foto de perfil:",
         error
       );
 
       setErrorFoto(
         error.message ||
-        "No fue posible guardar la foto."
+        "No fue posible guardar la foto de perfil."
       );
     } finally {
       setGuardandoFoto(false);
     }
   };
 
-  /* ========================================================
-     ERROR AL CARGAR FOTO
-     ======================================================== */
+  // =========================================================
+  // CANCELAR CAMBIOS DE FOTO
+  // =========================================================
 
-  const manejarErrorFoto = () => {
-    console.error(
-      "No fue posible cargar la foto desde:",
-      fotoActual
-    );
+  const cancelarCambiosFoto = () => {
+    if (vistaPrevia) {
+      URL.revokeObjectURL(vistaPrevia);
+    }
 
-    setErrorFoto(
-      "La foto fue guardada, pero no fue posible cargarla en pantalla."
-    );
+    setFotoSeleccionada(null);
+    setVistaPrevia(null);
+    setMensajeFoto("");
+    setErrorFoto("");
+    setMostrarOpcionesFoto(false);
   };
 
-  /* ========================================================
-     ELIMINAR FOTO
-     ======================================================== */
+  // =========================================================
+  // ELIMINAR FOTO DE PERFIL
+  // =========================================================
 
   const eliminarFoto = async () => {
     if (!idUsuario) {
       setErrorFoto(
-        "No fue posible identificar el usuario."
+        "No pudimos identificar tu cuenta."
       );
-
       return;
     }
 
-    setEliminandoFoto(true);
-    setMensajeFoto("");
-    setErrorFoto("");
+    const confirmar = window.confirm(
+      "¿Estás seguro de que deseas eliminar tu foto de perfil?"
+    );
+
+    if (!confirmar) {
+      return;
+    }
 
     try {
+      setEliminandoFoto(true);
+      setErrorFoto("");
+      setMensajeFoto("");
+
       const respuesta = await fetch(
         `${API_URL}/api/usuarios/${idUsuario}/foto`,
         {
@@ -600,8 +580,7 @@ function MiCuenta({
         }
       );
 
-      const datos =
-        await respuesta.json();
+      const datos = await respuesta.json();
 
       if (!respuesta.ok) {
         throw new Error(
@@ -610,14 +589,12 @@ function MiCuenta({
         );
       }
 
-      if (datos.usuario) {
-        if (actualizarUsuario) {
-          actualizarUsuario({
-            ...usuario,
-            ...datos.usuario,
-            foto_url: null,
-          });
-        }
+      if (actualizarUsuario) {
+        actualizarUsuario({
+          ...usuario,
+          ...(datos.usuario || {}),
+          foto_url: null,
+        });
       }
 
       if (vistaPrevia) {
@@ -626,15 +603,14 @@ function MiCuenta({
 
       setFotoSeleccionada(null);
       setVistaPrevia(null);
-      setMostrarCamara(false);
       setMostrarOpcionesFoto(false);
 
       setMensajeFoto(
-        "Foto de perfil eliminada correctamente."
+        "Tu foto de perfil fue eliminada correctamente."
       );
     } catch (error) {
       console.error(
-        "Error al eliminar la foto:",
+        "Error eliminando foto:",
         error
       );
 
@@ -646,227 +622,314 @@ function MiCuenta({
       setEliminandoFoto(false);
     }
   };
+  // =========================================================
+  // CAMBIAR A PASAJERO
+  // =========================================================
+
+  const cambiarAPasajero = async () => {
+    if (!idUsuario) {
+      setErrorRol(
+        "No pudimos identificar tu cuenta."
+      );
+      return;
+    }
+
+    const confirmar = window.confirm(
+      "¿Deseas cambiar tu rol a pasajero? Dejarás de tener acceso a las opciones exclusivas de conductor."
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setCambiandoRol(true);
+      setErrorRol("");
+      setMensajeRol("");
+
+      const respuesta = await fetch(
+        `${API_URL}/api/usuarios/${idUsuario}/rol`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rol: "pasajero",
+          }),
+        }
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje ||
+          "No fue posible cambiar tu rol."
+        );
+      }
+
+      if (actualizarUsuario) {
+        actualizarUsuario({
+          ...usuario,
+          ...(datos.usuario || {}),
+          rol: "pasajero",
+          rol_solicitado: "pasajero",
+          requiere_vehiculo: false,
+        });
+      }
+
+      localStorage.removeItem(
+        "tdea_go_registro_pendiente"
+      );
+
+      setMensajeRol(
+        "Tu rol se actualizó correctamente. Ahora eres pasajero."
+      );
+    } catch (error) {
+      console.error(
+        "Error cambiando a pasajero:",
+        error
+      );
+
+      setErrorRol(
+        error.message ||
+        "No fue posible cambiar el rol."
+      );
+    } finally {
+      setCambiandoRol(false);
+    }
+  };
+
+  // =========================================================
+  // CAMBIAR A CONDUCTOR
+  // =========================================================
+
+  const solicitarRolConductor = () => {
+    setErrorRol("");
+    setMensajeRol("");
+
+    if (esConductor) {
+      setMensajeRol(
+        "Tu cuenta ya tiene el rol de conductor."
+      );
+      return;
+    }
+
+    setMensajeRol(
+      "Para activar el rol de conductor, registra los datos de tu vehículo en la sección inferior."
+    );
+
+    const seccionVehiculo =
+      document.getElementById("seccion-registro-vehiculo");
+
+    seccionVehiculo?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+  // =========================================================
+  // INTERFAZ PRINCIPAL DE MI CUENTA
+  // =========================================================
 
   return (
     <section className="mi-cuenta-pagina">
-
       <div className="mi-cuenta-contenedor">
 
-        {/* ==================================================
-            ENCABEZADO
-            ================================================== */}
+        {/* ENCABEZADO */}
 
-        <div className="mi-cuenta-introduccion">
-
+        <div className="mi-cuenta-encabezado">
           <div>
-          <div className="mi-cuenta-introduccion">
-
-          </div>
-
             <span className="mi-cuenta-etiqueta">
-              MI CUENTA
+              CUENTA PERSONAL
             </span>
 
-            <h1>
-              Hola, {nombreCompleto.split(" ")[0]}
-            </h1>
+            <h1>Mi cuenta</h1>
 
             <p>
-              Administra tu información y consulta tu
-              experiencia en TdeA GO.
+              Consulta tus datos y administra tu perfil
+              en TdeA GO.
             </p>
-
           </div>
-
         </div>
 
-        {/* ==================================================
-            PERFIL
-            ================================================== */}
+        {/* INFORMACIÓN DEL PERFIL */}
 
         <div className="mi-cuenta-grid">
 
+          {/* TARJETA DE FOTO */}
+
           <article className="tarjeta-perfil">
+            <div className="tarjeta-perfil-contenido">
 
-            <div className="perfil-superior">
-
-              {/* ==================================================
-                  FOTO
-                  ================================================== */}
-
-              <div className="zona-foto-perfil">
-
-                <div className="avatar-grande">
-
+              <div className="perfil-foto-contenedor">
+                <div className="perfil-foto">
                   {fotoActual ? (
                     <img
                       src={fotoActual}
-                      alt={`Foto de ${nombreCompleto}`}
-                      onError={manejarErrorFoto}
+                      alt="Foto de perfil"
+                      className="perfil-foto-imagen"
                     />
                   ) : (
-                    iniciales || "U"
+                    <span className="perfil-foto-iniciales">
+                      {iniciales || "U"}
+                    </span>
                   )}
-
                 </div>
 
                 <button
                   type="button"
-                  className="boton-cambiar-foto"
+                  className="perfil-foto-editar"
                   onClick={alternarOpcionesFoto}
+                  aria-label="Administrar foto de perfil"
+                  title="Administrar foto de perfil"
                 >
-                  {fotoActual
-                    ? "Cambiar foto"
-                    : "Agregar foto"}
+                  Editar
                 </button>
-
-                {/* ==================================================
-                    MENÚ DESPLEGABLE
-                    ================================================== */}
-
-                {mostrarOpcionesFoto && (
-                  <div className="opciones-foto">
-
-                    <button
-                      type="button"
-                      onClick={abrirCamara}
-                    >
-                      Tomar una foto
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={abrirArchivos}
-                    >
-                      Elegir una foto
-                    </button>
-
-                  </div>
-                )}
-
-                {/* ==================================================
-                    INPUT PARA ARCHIVOS
-                    ================================================== */}
-
-                <input
-                  ref={inputArchivoRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="input-foto-oculto"
-                  onChange={seleccionarFoto}
-                />
-
               </div>
 
-              {/* ==================================================
-                  IDENTIDAD
-                  ================================================== */}
+              <h2 className="perfil-nombre">
+                {nombreCompleto}
+              </h2>
 
-              <div className="perfil-identidad">
+              <p className="perfil-correo">
+                {correo}
+              </p>
 
-                <h2>
-                  {nombreCompleto}
-                </h2>
+              <span
+                className={`perfil-rol ${esConductor
+                  ? "perfil-rol-conductor"
+                  : "perfil-rol-pasajero"
+                  }`}
+              >
+                {esConductor
+                  ? "Conductor"
+                  : "Pasajero"}
+              </span>
 
-                <span className="perfil-rol">
-                  {esConductor
-                    ? "Conductor"
-                    : "Pasajero"}
-                </span>
+              {/* OPCIONES PARA ADMINISTRAR LA FOTO */}
 
-              </div>
-
-            </div>
-
-            {/* ==================================================
-                CÁMARA
-                ================================================== */}
-
-            {mostrarCamara && (
-              <div className="panel-camara">
-
-                <div className="encabezado-camara">
-
-                  <div>
-
-                    <span className="etiqueta-camara">
-                      CÁMARA
-                    </span>
-
-                    <h3>
-                      Toma una foto
-                    </h3>
-
-                  </div>
+              {mostrarOpcionesFoto && (
+                <div className="perfil-opciones-foto">
+                  <button
+                    type="button"
+                    onClick={abrirSelectorArchivo}
+                    className="boton-opcion-foto"
+                  >
+                    Elegir imagen del equipo
+                  </button>
 
                   <button
                     type="button"
-                    className="boton-cerrar-camara"
-                    onClick={cerrarCamara}
-                    aria-label="Cerrar cámara"
+                    onClick={abrirCamara}
+                    className="boton-opcion-foto"
                   >
-                    ×
+                    Tomar foto con la cámara
                   </button>
 
-                </div>
+                  {usuario.foto_url && (
+                    <button
+                      type="button"
+                      onClick={eliminarFoto}
+                      disabled={eliminandoFoto}
+                      className="boton-opcion-foto boton-eliminar-foto"
+                    >
+                      {eliminandoFoto
+                        ? "Eliminando..."
+                        : "Eliminar foto actual"}
+                    </button>
+                  )}
 
-                <div className="visor-camara">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarOpcionesFoto(false)
+                    }
+                    className="boton-opcion-foto boton-cancelar-foto"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {/* SELECTOR DE ARCHIVOS */}
+
+              <input
+                ref={inputArchivoRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={manejarArchivoSeleccionado}
+                style={{ display: "none" }}
+              />
+
+              {/* VENTANA DE CÁMARA */}
+
+              {mostrarCamara && (
+                <div className="camara-contenedor">
+                  <h3>Tomar foto</h3>
 
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
+                    className="camara-video"
                   />
 
+                  <canvas
+                    ref={canvasRef}
+                    style={{ display: "none" }}
+                  />
+
+                  <div className="camara-acciones">
+                    <button
+                      type="button"
+                      onClick={capturarFoto}
+                      className="boton-guardar-foto"
+                    >
+                      Capturar foto
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={cancelarCamara}
+                      className="boton-cancelar-foto"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
                 </div>
+              )}
 
-                <canvas
-                  ref={canvasRef}
-                  className="canvas-oculto"
-                />
+              {/* MENSAJES DE FOTO */}
 
-                <div className="controles-camara">
-
-                  <button
-                    type="button"
-                    className="boton-tomar-foto"
-                    onClick={tomarFoto}
-                  >
-                    Tomar foto
-                  </button>
-
-                  <button
-                    type="button"
-                    className="boton-cancelar-foto"
-                    onClick={cerrarCamara}
-                  >
-                    Cancelar
-                  </button>
-
-                </div>
-
-              </div>
-            )}
-
-            {/* ==================================================
-                GUARDAR NUEVA FOTO
-                ================================================== */}
-
-            {fotoSeleccionada && (
-              <div className="acciones-foto">
-
-                <p className="texto-foto-seleccionada">
-                  Vista previa de la nueva foto
+              {mensajeFoto && (
+                <p
+                  className="mensaje-foto"
+                  role="status"
+                >
+                  {mensajeFoto}
                 </p>
+              )}
 
-                <div className="botones-foto">
+              {errorFoto && (
+                <p
+                  className="error-foto"
+                  role="alert"
+                >
+                  {errorFoto}
+                </p>
+              )}
 
+              {/* GUARDAR FOTO */}
+
+              {fotoSeleccionada && (
+                <div className="acciones-foto-seleccionada">
                   <button
                     type="button"
-                    className="boton-guardar-foto"
                     onClick={guardarFoto}
                     disabled={guardandoFoto}
+                    className="boton-guardar-foto"
                   >
                     {guardandoFoto
                       ? "Guardando..."
@@ -875,379 +938,213 @@ function MiCuenta({
 
                   <button
                     type="button"
-                    className="boton-cancelar-foto"
-                    onClick={cancelarCambioFoto}
+                    onClick={cancelarCambiosFoto}
                     disabled={guardandoFoto}
+                    className="boton-cancelar-foto"
                   >
-                    Cancelar
+                    Descartar cambios
                   </button>
-
-                </div>
-
-              </div>
-            )}
-
-            {/* ==================================================
-                ELIMINAR FOTO
-                ================================================== */}
-
-            {usuario.foto_url &&
-              !fotoSeleccionada &&
-              !mostrarCamara && (
-                <div className="acciones-foto">
-
-                  <button
-                    type="button"
-                    className="boton-eliminar-foto"
-                    onClick={eliminarFoto}
-                    disabled={eliminandoFoto}
-                  >
-                    {eliminandoFoto
-                      ? "Eliminando..."
-                      : "Eliminar foto de perfil"}
-                  </button>
-
                 </div>
               )}
+            </div>
+          </article>
 
-            {/* ==================================================
-                MENSAJES
-                ================================================== */}
+          {/* TARJETA DE INFORMACIÓN PERSONAL */}
 
-            {mensajeFoto && (
-              <p className="mensaje-foto mensaje-foto-exito">
-                {mensajeFoto}
-              </p>
-            )}
-
-            {errorFoto && (
-              <p className="mensaje-foto mensaje-foto-error">
-                {errorFoto}
-              </p>
-            )}
-
-            {/* ==================================================
-                DATOS
-                ================================================== */}
-
-            <div className="perfil-datos">
-
-              <div className="dato-perfil">
-
-                <span className="dato-etiqueta">
-                  Correo electrónico
+          <article className="tarjeta-informacion">
+            <div className="tarjeta-seccion-encabezado">
+              <div>
+                <span className="mi-cuenta-etiqueta">
+                  INFORMACIÓN PERSONAL
                 </span>
 
-                <strong>
-                  {correo}
-                </strong>
+                <h2>Datos de la cuenta</h2>
+              </div>
+            </div>
 
+            <div className="informacion-datos">
+
+              <div className="campo-informacion">
+                <span className="campo-informacion-etiqueta">
+                  Nombre completo
+                </span>
+
+                <p>{nombreCompleto}</p>
               </div>
 
-              <div className="dato-perfil">
+              <div className="campo-informacion">
+                <span className="campo-informacion-etiqueta">
+                  Correo institucional
+                </span>
 
-                <span className="dato-etiqueta">
+                <p>{correo}</p>
+              </div>
+
+              <div className="campo-informacion">
+                <span className="campo-informacion-etiqueta">
                   Teléfono
                 </span>
 
-                <strong>
-                  {telefono}
-                </strong>
+                <p>{telefono}</p>
+              </div>
 
+              <div className="campo-informacion">
+                <span className="campo-informacion-etiqueta">
+                  Rol actual
+                </span>
+
+                <p>
+                  {esConductor
+                    ? "Conductor"
+                    : "Pasajero"}
+                </p>
               </div>
 
             </div>
 
+            <p className="nota-informacion">
+              Esta sección muestra la información registrada
+              en tu cuenta.
+            </p>
           </article>
+        </div>
+        {/* ADMINISTRACIÓN DEL ROL */}
 
-          {/* ==================================================
-              ROL ACTIVO
-              ================================================== */}
+        <section className="tarjeta-rol">
+          <div className="tarjeta-rol-contenido">
+            <div>
+              <span className="mi-cuenta-etiqueta">
+                TIPO DE USUARIO
+              </span>
 
-          <article className="tarjeta-experiencia">
+              <h2>
+                {esConductor
+                  ? "Tu cuenta de conductor"
+                  : "Tu cuenta de pasajero"}
+              </h2>
 
-            <div className="tarjeta-icono">
-              {esConductor ? "C" : "P"}
+              <p>
+                {esConductor
+                  ? "Puedes administrar tus rutas y ofrecer cupos disponibles a otros estudiantes."
+                  : "Puedes consultar rutas disponibles y solicitar cupos para tus desplazamientos."}
+              </p>
             </div>
 
-            <span className="tarjeta-etiqueta">
-              TU EXPERIENCIA ACTUAL
+            <div className="tarjeta-rol-acciones">
+              {esConductor ? (
+                <button
+                  type="button"
+                  onClick={cambiarAPasajero}
+                  disabled={cambiandoRol}
+                  className="boton-secundario"
+                >
+                  {cambiandoRol
+                    ? "Actualizando..."
+                    : "Cambiar a pasajero"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={solicitarRolConductor}
+                  className="boton-principal"
+                >
+                  Quiero ser conductor
+                </button>
+              )}
+            </div>
+          </div>
+
+          {mensajeRol && (
+            <p
+              className="mensaje-rol"
+              role="status"
+            >
+              {mensajeRol}
+            </p>
+          )}
+
+          {errorRol && (
+            <p
+              className="error-rol"
+              role="alert"
+            >
+              {errorRol}
+            </p>
+          )}
+        </section>
+
+        {/* REGISTRO DE VEHÍCULO */}
+
+        <section
+          className="tarjeta-vehiculo"
+          id="seccion-registro-vehiculo"
+        >
+          <div className="tarjeta-vehiculo-encabezado">
+            <span className="mi-cuenta-etiqueta">
+              VEHÍCULO
             </span>
 
             <h2>
               {esConductor
-                ? "Estás usando TdeA GO como conductor"
-                : "Estás usando TdeA GO como pasajero"}
+                ? "Información de tu vehículo"
+                : "Registra tu vehículo"}
             </h2>
 
             <p>
               {esConductor
-                ? "Puedes publicar rutas, administrar tus rutas y gestionar las solicitudes de los pasajeros."
-                : "Puedes buscar rutas disponibles y gestionar las solicitudes de viaje que hayas realizado."}
-            </p>
-
-          </article>
-
-        </div>
-
-        {/* ==================================================
-            REGISTRO DE VEHÍCULO
-            Los pasajeros también pueden registrar su vehículo para
-            solicitar la activación del rol de conductor.
-            ================================================== */}
-        <div style={{ margin: "30px 0" }}>
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ marginBottom: "8px" }}>
-              {esConductor ? "Mi vehículo" : "Registra tu vehículo para ser conductor"}
-            </h3>
-            <p style={{ margin: 0 }}>
-              {esConductor
-                ? "Puedes registrar o actualizar los datos del vehículo asociado a tu cuenta."
-                : "Para publicar rutas y ofrecer cupos, registra primero los datos de tu vehículo. Cuando se guarde correctamente, validaremos el registro y activaremos tu rol de conductor."}
+                ? "Aquí puedes registrar o actualizar la información de tu vehículo."
+                : "Para activar tu perfil de conductor debes registrar los datos de tu vehículo. Hasta completar este paso, no podrás publicar rutas."}
             </p>
           </div>
 
+          {!esConductor && (
+            <div className="aviso-registro-vehiculo">
+              <strong>Antes de continuar</strong>
+
+              <p>
+                Completa el formulario y guarda los datos
+                de tu vehículo. Después de registrarlo,
+                activaremos el rol de conductor.
+              </p>
+            </div>
+          )}
+
           <RegistrarVehiculo
-            usuarioId={idUsuario}
-            onVehiculoRegistrado={manejarVehiculoRegistrado}
+            usuario={usuario}
+            API_URL={API_URL}
+            onVehiculoRegistrado={
+              manejarVehiculoRegistrado
+            }
           />
 
           {cambiandoRol && (
-            <p role="status" style={{ marginTop: "12px" }}>
-              Estamos verificando tu vehículo y actualizando tu rol...
+            <p className="mensaje-rol" role="status">
+              Estamos activando tu perfil de conductor.
+              No cierres esta página.
             </p>
           )}
-          {mensajeRol && (
-            <p role="status" style={{ marginTop: "12px", color: "#18794e" }}>
-              {mensajeRol}
+        </section>
+        {/* CERRAR SESIÓN */}
+
+        <section className="seccion-cerrar-sesion">
+          <div>
+            <h2>¿Terminaste por ahora?</h2>
+
+            <p>
+              Puedes cerrar tu sesión de forma segura.
             </p>
-          )}
-          {errorRol && (
-            <p role="alert" style={{ marginTop: "12px", color: "#b42318" }}>
-              {errorRol}
-            </p>
-          )}
-        </div>
-
-        {/* ==================================================
-            ACCIONES SEGÚN ROL
-            ================================================== */}
-
-        <div className="seccion-experiencia">
-
-          <div className="titulo-seccion">
-
-            <span>
-              Accesos rápidos
-            </span>
-
-            <h2>
-              ¿Qué quieres hacer?
-            </h2>
-
           </div>
-
-          <div className="acciones-cuenta">
-
-            {esConductor ? (
-              <>
-                <a
-                  href="/publicar"
-                  className="accion-cuenta accion-principal"
-                >
-                  <span className="accion-indicador">
-                    +
-                  </span>
-
-                  <span className="accion-contenido">
-
-                    <strong>
-                      Publicar una ruta
-                    </strong>
-
-                    <small>
-                      Comparte los cupos disponibles
-                    </small>
-
-                  </span>
-
-                  <span className="accion-flecha">
-                    →
-                  </span>
-
-                </a>
-
-                <a
-                  href="/mis-rutas"
-                  className="accion-cuenta"
-                >
-                  <span className="accion-indicador">
-                    R
-                  </span>
-
-                  <span className="accion-contenido">
-
-                    <strong>
-                      Mis rutas
-                    </strong>
-
-                    <small>
-                      Consulta y administra tus rutas
-                    </small>
-
-                  </span>
-
-                  <span className="accion-flecha">
-                    →
-                  </span>
-
-                </a>
-              </>
-            ) : (
-              <>
-                <a
-                  href="/buscar"
-                  className="accion-cuenta accion-principal"
-                >
-                  <span className="accion-indicador">
-                    B
-                  </span>
-
-                  <span className="accion-contenido">
-
-                    <strong>
-                      Buscar una ruta
-                    </strong>
-
-                    <small>
-                      Encuentra una opción de transporte
-                    </small>
-
-                  </span>
-
-                  <span className="accion-flecha">
-                    →
-                  </span>
-
-                </a>
-
-                <a
-                  href="/mis-solicitudes"
-                  className="accion-cuenta"
-                >
-                  <span className="accion-indicador">
-                    S
-                  </span>
-
-                  <span className="accion-contenido">
-
-                    <strong>
-                      Mis solicitudes
-                    </strong>
-
-                    <small>
-                      Consulta tus solicitudes de viaje
-                    </small>
-
-                  </span>
-
-                  <span className="accion-flecha">
-                    →
-                  </span>
-
-                </a>
-              </>
-            )}
-
-          </div>
-
-        </div>
-
-        {/* ==================================================
-            INFORMACIÓN DE CUENTA
-            ================================================== */}
-
-        <div className="seccion-configuracion">
-
-          <div className="titulo-seccion">
-
-            <span>
-              Cuenta
-            </span>
-
-            <h2>
-              Información de acceso
-            </h2>
-
-          </div>
-
-          <div className="lista-configuracion">
-
-            <div className="fila-configuracion">
-
-              <div>
-
-                <strong>
-                  Rol actual
-                </strong>
-
-                <p>
-                  Todas las cuentas comienzan como pasajero. Para activar el rol de conductor, registra primero un vehículo desde esta página.
-                </p>
-
-              </div>
-
-              <span className="estado-cuenta">
-                {esConductor
-                  ? "Conductor"
-                  : "Pasajero"}
-              </span>
-
-            </div>
-
-            <div className="fila-configuracion">
-
-              <div>
-
-                <strong>
-                  Estado de la cuenta
-                </strong>
-
-                <p>
-                  Tu cuenta está disponible para utilizar
-                  TdeA GO.
-                </p>
-
-              </div>
-
-              <span className="estado-activo">
-                Activa
-              </span>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* ==================================================
-            CERRAR SESIÓN
-            ================================================== */}
-
-        <div className="zona-cerrar-sesion">
 
           <button
             type="button"
-            className="boton-cerrar-cuenta"
             onClick={cerrarSesion}
+            className="boton-cerrar-sesion"
           >
             Cerrar sesión
           </button>
-
-        </div>
+        </section>
 
       </div>
-
     </section>
   );
 }

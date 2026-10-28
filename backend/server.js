@@ -281,11 +281,36 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    let { data: profile } = await dbClient
+    let { data: profile, error: errorPerfil } = await dbClient
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .maybeSingle();
+
+    if (errorPerfil) {
+      console.error("Error consultando perfil:", errorPerfil);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar la información del perfil.",
+      });
+    }
+
+    // Si no coincide el ID, buscar el perfil existente por correo.
+    if (!profile && user.email) {
+      const { data: perfilPorCorreo, error: errorCorreo } = await dbClient
+        .from("profiles")
+        .select("*")
+        .ilike("correo", user.email)
+        .maybeSingle();
+
+      if (errorCorreo) {
+        console.error("Error buscando perfil por correo:", errorCorreo);
+        return res.status(500).json({
+          mensaje: "No fue posible consultar la información del perfil.",
+        });
+      }
+
+      profile = perfilPorCorreo;
+    }
 
     if (!profile) {
       const meta = user.user_metadata || {};

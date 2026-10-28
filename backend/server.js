@@ -126,16 +126,17 @@ app.get("/", (req, res) => {
 // POST /api/usuarios
 // ------------------------------------------------------------------
 
-app.post("/api/usuarios", async (req, res) => {
-  const {
-    nombre,
-    apellido,
-    correo,
-    telefono,
-    contrasena,
-  } = req.body;
 
-  if (!nombre || !apellido || !correo || !telefono || !contrasena) {
+app.post("/api/usuarios", async (req, res) => {
+  const { nombre, apellido, correo, telefono, contrasena } = req.body;
+
+  if (
+    !nombre?.trim() ||
+    !apellido?.trim() ||
+    !correo?.trim() ||
+    !telefono?.trim() ||
+    !contrasena
+  ) {
     return res.status(400).json({
       mensaje: "Completa todos los campos obligatorios para crear tu cuenta.",
     });
@@ -148,14 +149,14 @@ app.post("/api/usuarios", async (req, res) => {
     !correoNormalizado.endsWith("@tdea.edu.co")
   ) {
     return res.status(400).json({
-      mensaje: "Debes utilizar tu correo institucional del TdeA (@correo.tdea.edu.co o @tdea.edu.co).",
+      mensaje:
+        "Debes utilizar tu correo institucional del TdeA (@correo.tdea.edu.co o @tdea.edu.co).",
     });
   }
 
   try {
     const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`;
-
-    // Todos los usuarios nuevos comienzan como pasajeros.
+    const telefonoNormalizado = telefono.trim();
     const rolUsuario = "pasajero";
 
     const { data: authData, error: authError } =
@@ -165,45 +166,78 @@ app.post("/api/usuarios", async (req, res) => {
         options: {
           data: {
             nombre_completo: nombreCompleto,
-            telefono: telefono.trim(),
+            telefono: telefonoNormalizado,
             rol: rolUsuario,
           },
         },
       });
 
     if (authError) {
+      console.error("Error creando usuario en Supabase Auth:", {
+        message: authError.message,
+        status: authError.status,
+        code: authError.code,
+      });
+
       return res.status(400).json({
         mensaje: authError.message || "Error al crear la cuenta en Supabase.",
+        detalle: authError.message,
+        codigo: authError.code || null,
       });
     }
 
     const userId = authData.user?.id;
 
-    if (userId) {
-      const { error: perfilError } =
-        await dbClient.from("profiles").upsert(
-          [
-            {
-              id: userId,
-              nombre_completo: nombreCompleto,
-              correo: correoNormalizado,
-              telefono: telefono.trim(),
-              rol: rolUsuario,
-              verificado: false,
-              foto_url: null,
-              creado_en: new Date().toISOString(),
-            },
-          ],
-          { onConflict: "id" }
-        );
+    if (!userId) {
+      console.error(
+        "Registro sin ID de usuario:",
+        authData
+      );
 
-      if (perfilError) {
-        console.error("Error guardando perfil:", perfilError);
-      }
+      return res.status(500).json({
+        mensaje:
+          "Supabase no devolvió el identificador del usuario. No se pudo completar el registro.",
+      });
+    }
+
+    const { error: perfilError } = await dbClient
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          nombre_completo: nombreCompleto,
+          correo: correoNormalizado,
+          telefono: telefonoNormalizado,
+          rol: rolUsuario,
+          verificado: false,
+          foto_url: null,
+          creado_en: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (perfilError) {
+      console.error("Error guardando perfil en profiles:", {
+        message: perfilError.message,
+        code: perfilError.code,
+        details: perfilError.details,
+        hint: perfilError.hint,
+      });
+
+      return res.status(500).json({
+        mensaje: "La cuenta se creó, pero no se pudo guardar el perfil.",
+        detalle: perfilError.message,
+        codigo: perfilError.code || null,
+        detalles: perfilError.details || null,
+        sugerencia: perfilError.hint || null,
+        usuarioCreado: true,
+        usuarioId: userId,
+      });
     }
 
     return res.status(201).json({
-      mensaje: "Cuenta creada correctamente. Te hemos enviado un correo de confirmación a tu bandeja institucional para que actives tu cuenta.",
+      mensaje:
+        "Cuenta creada correctamente. Te hemos enviado un correo de confirmación a tu bandeja institucional para que actives tu cuenta.",
       usuario: {
         id: userId,
         nombre_completo: nombreCompleto,
@@ -212,12 +246,16 @@ app.post("/api/usuarios", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error en /api/usuarios:", error);
+    console.error("Error inesperado en /api/usuarios:", error);
+
     return res.status(500).json({
       mensaje: "Error interno del servidor al procesar el registro.",
+      detalle: error.message || "Error desconocido.",
+      codigo: error.code || null,
     });
   }
 });
+
 
 // ------------------------------------------------------------------
 // 3. INICIO DE SESIÓN

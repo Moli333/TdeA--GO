@@ -699,12 +699,13 @@ app.get("/api/rutas", async (req, res) => {
         fecha_hora_salida,
         cupos_totales,
         cupos_disponibles,
+        conductor:profiles!rutas_conductor_id_fkey (
         tarifa_contribucion,
         estado,
         conductor_id,
         vehiculo_id,
         creado_en,
-        conductor:profiles!fk_rutas_conductor_id_profiles (
+        
           id,
           nombre_completo,
           correo,
@@ -713,7 +714,7 @@ app.get("/api/rutas", async (req, res) => {
           verificado,
           foto_url
         ),
-        vehiculo:vehiculos!fk_rutas_vehiculo_id_vehiculos (
+        vehiculo:vehiculos!rutas_vehiculo_id_fkey (
           id,
           tipo,
           marca_modelo,

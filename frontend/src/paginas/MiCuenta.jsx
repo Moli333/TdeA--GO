@@ -2,7 +2,6 @@
 import "./MiCuenta.css";
 import { useEffect, useRef, useState } from "react";
 import RegistrarVehiculo from "./RegistrarVehiculo";
-import RegistrarVehiculo from "./paginas/RegistrarVehiculo";
 
 const API_URL_PREDETERMINADA =
   import.meta.env.VITE_API_URL || "http://localhost:5000";

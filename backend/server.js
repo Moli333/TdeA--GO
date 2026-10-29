@@ -786,65 +786,58 @@ app.get("/api/rutas", async (req, res) => {
         fecha_hora_salida,
         cupos_totales,
         cupos_disponibles,
-        conductor:profiles!rutas_conductor_id_fkey (
         tarifa_contribucion,
         estado,
         conductor_id,
-        vehiculo_id,
         creado_en,
-        
+        profiles:conductor_id (
           id,
           nombre_completo,
-          correo,
           telefono,
-          rol,
           verificado,
           foto_url
-        ),
-        vehiculo:vehiculos!rutas_vehiculo_id_fkey (
-          id,
-          tipo,
-          marca_modelo,
-          placa,
-          color,
-          capacidad_maxima
         )
       `)
-      .order("fecha_hora_salida", {
-        ascending: true,
-      });
+      .order("fecha_hora_salida", { ascending: true });
 
     if (error) {
-      console.error("Error obteniendo rutas:", error);
-
+      console.error("Error de Supabase en /api/rutas:", error);
       return res.status(500).json({
         mensaje: "No fue posible consultar las rutas.",
-        detalle: error.message,
+        detalle: error.message
       });
     }
 
     const rutas = (data || []).map((ruta) => ({
-      ...ruta,
-      fecha: ruta.fecha_hora_salida
-        ? String(ruta.fecha_hora_salida).slice(0, 10)
-        : "",
-      hora: ruta.fecha_hora_salida
-        ? String(ruta.fecha_hora_salida).slice(11, 16)
-        : "",
-      conductor: ruta.conductor || null,
-      vehiculo: ruta.vehiculo || null,
+      id: ruta.id,
+      origen: ruta.origen,
+      destino: ruta.destino,
+      lat_origen: ruta.lat_origen,
+      lng_origen: ruta.lng_origen,
+      lat_destino: ruta.lat_destino,
+      lng_destino: ruta.lng_destino,
+      fecha_hora_salida: ruta.fecha_hora_salida,
+      fecha: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(0, 10) : "",
+      hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
+      cupos_totales: ruta.cupos_totales,
+      cupos_disponibles: ruta.cupos_disponibles,
+      tarifa_contribucion: ruta.tarifa_contribucion,
+      estado: ruta.estado,
+      conductor_id: ruta.conductor_id,
+      conductor: ruta.profiles || null,
+      vehiculo: null, // Evita errores de columnas inexistentes
+      creado_en: ruta.creado_en,
     }));
 
-    return res.json(rutas);
+    res.json(rutas);
   } catch (error) {
     console.error("Error obteniendo rutas:", error);
-
-    return res.status(500).json({
+    res.status(500).json({
       mensaje: "No fue posible consultar las rutas.",
+      detalle: error.message
     });
   }
 });
-
 // ------------------------------------------------------------------
 // 9. PUBLICAR RUTA
 // POST /api/rutas
@@ -1011,9 +1004,9 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!id) {
+    if (!id || id === "undefined" || id === "null") {
       return res.status(400).json({
-        mensaje: "El ID del conductor es obligatorio.",
+        mensaje: "El ID del conductor no es válido.",
       });
     }
 
@@ -1042,7 +1035,7 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
 
     if (error) {
       console.error(
-        "Error consultando rutas del conductor:",
+        "Error consultando rutas del conductor en Supabase:",
         error
       );
 
@@ -1052,10 +1045,17 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
       });
     }
 
-    return res.status(200).json(data || []);
+    // Mapeamos las rutas asegurando que los campos fecha y hora vayan listos para el frontend
+    const rutasFormateadas = (data || []).map((ruta) => ({
+      ...ruta,
+      fecha: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(0, 10) : "",
+      hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
+    }));
+
+    return res.status(200).json(rutasFormateadas);
   } catch (error) {
     console.error(
-      "Error en /api/rutas/conductor/:id:",
+      "Error crítico en /api/rutas/conductor/:id:",
       error
     );
 
@@ -1064,7 +1064,6 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
     });
   }
 });
-
 // ------------------------------------------------------------------
 // 11. SOLICITAR CUPO
 // POST /api/solicitudes

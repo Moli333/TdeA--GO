@@ -11,6 +11,7 @@ function MisRutas({ usuario }) {
 
   useEffect(() => {
     const cargarRutas = async () => {
+      console.log("USUARIO ACTUAL EN MIS RUTAS:", usuario);
       if (!usuario?.id) {
         setRutas([]);
         setCargando(false);
@@ -24,6 +25,8 @@ function MisRutas({ usuario }) {
         const respuesta = await fetch(`${API_URL}/api/rutas`);
 
         const datos = await respuesta.json();
+
+        console.log("RUTAS OBTENIDAS DEL SERVIDOR:", datos);
 
         if (!respuesta.ok) {
           throw new Error(

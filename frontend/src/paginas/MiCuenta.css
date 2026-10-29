@@ -105,8 +105,8 @@
 
 
 .avatar-grande {
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,8 +120,8 @@
 }
 
 .avatar-grande img {
-  width: 50%;
-  height: 50%;
+  width: 60%;
+  height: 60%;
   display: block;
   object-fit: cover;
   border-radius: 25%;

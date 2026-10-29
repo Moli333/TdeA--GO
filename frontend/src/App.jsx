@@ -52,7 +52,7 @@ function cargarUsuarioGuardado() {
         ).toLowerCase();
 
         if (
-          pendiente.rol === "conductor" &&
+          pendiente.rol_solicitado === "conductor" &&
           correoUsuario &&
           correoUsuario === correoPendiente &&
           datosUsuario.rol?.toLowerCase() !== "conductor"
@@ -99,7 +99,8 @@ function Aplicacion() {
   const [usuario, setUsuario] = useState(cargarUsuarioGuardado);
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
-
+  const [mostrarModalVehiculo, setMostrarModalVehiculo] = useState(false);
+  const [cambiandoRol, setCambiandoRol] = useState(false);
   const contenedorUsuarioRef = useRef(null);
 
   const navegar = useNavigate();
@@ -208,7 +209,7 @@ function Aplicacion() {
         ).toLowerCase();
 
         if (
-          pendiente.rol === "conductor" &&
+          pendiente.rol_solicitado === "conductor" &&
           correoUsuario &&
           correoUsuario === correoPendiente &&
           usuarioFinal.rol?.toLowerCase() !== "conductor"
@@ -248,7 +249,7 @@ function Aplicacion() {
   };
 
   const cambiarRol = async (nuevoRol) => {
-    if (!usuario) return;
+    if (!usuario || cambiandoRol) return;
 
     setMostrarMenuUsuario(false);
 
@@ -261,6 +262,7 @@ function Aplicacion() {
       };
 
       actualizarUsuario(usuarioActualizado);
+      localStorage.removeItem("tdea_go_registro_pendiente");
       navegar("/buscar");
       return;
     }
@@ -270,81 +272,65 @@ function Aplicacion() {
     const idUsuario = usuario.id || usuario.id_usuario;
 
     if (!idUsuario) {
-      alert("No se pudo identificar tu cuenta. Cierra sesión e inicia nuevamente.");
+      alert("No se pudo identificar tu cuenta. Inicia sesión nuevamente.");
       return;
     }
 
     try {
-      // Primero comprobamos si ya existe un vehículo registrado.
-      const respuestaVehiculo = await fetch(
-        `${API_URL}/api/vehiculos/${idUsuario}`
-      );
-      const datosVehiculo = await respuestaVehiculo.json();
+      setCambiandoRol(true);
 
-      if (!respuestaVehiculo.ok) {
-        throw new Error(
-          datosVehiculo.mensaje || "No fue posible consultar tu vehículo."
-        );
-      }
-
-      const vehiculo = datosVehiculo.vehiculo;
-
-      // Si no tiene vehículo, guardamos la solicitud y exigimos el registro.
-      if (!vehiculo) {
-        const usuarioPendiente = {
-          ...usuario,
-          rol_solicitado: "conductor",
-          requiere_vehiculo: true,
-        };
-
-        actualizarUsuario(usuarioPendiente);
-
-        localStorage.setItem(
-          "tdea_go_registro_pendiente",
-          JSON.stringify({
-            correo: usuario.correo || usuario.email,
-            rol_solicitado: "conductor",
-          })
-        );
-
-        navegar("/mi-cuenta");
-        return;
-      }
-
-      // Si ya tiene vehículo, activamos el rol sin cerrar sesión.
-      const respuestaRol = await fetch(
-        `${API_URL}/api/usuarios/${idUsuario}/rol`,
+      // El servidor verifica si el usuario tiene un vehículo registrado.
+      const respuesta = await fetch(
+        `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ rol: "conductor" }),
         }
       );
 
-      const datosRol = await respuestaRol.json();
+      const datos = await respuesta.json();
 
-      if (!respuestaRol.ok) {
+      // Si no tiene vehículo, mostramos la ventana emergente.
+      if (
+        !respuesta.ok &&
+        (
+          datos.requiereVehiculo === true ||
+          datos.requiere_vehiculo === true
+        )
+      ) {
+        setMostrarModalVehiculo(true);
+        return;
+      }
+
+      if (!respuesta.ok) {
         throw new Error(
-          datosRol.mensaje || "No fue posible activar el rol de conductor."
+          datos.mensaje || "No fue posible activar el rol de conductor."
         );
       }
 
+      // Actualizamos la sesión sin cerrar sesión ni volver a iniciar.
       const usuarioActualizado = {
         ...usuario,
-        ...(datosRol.usuario || datosRol.perfil || {}),
+        ...(datos.usuario || datos.perfil || {}),
         rol: "conductor",
         rol_solicitado: "conductor",
         requiere_vehiculo: false,
       };
 
       actualizarUsuario(usuarioActualizado);
-      localStorage.removeItem("tdea_go_registro_pendiente");
 
-      // Ya puede entrar a las opciones de conductor.
+      localStorage.removeItem("tdea_go_registro_pendiente");
+      setMostrarModalVehiculo(false);
+
       navegar("/mis-rutas");
     } catch (error) {
-      console.error("Error al cambiar al rol de conductor:", error);
-      alert(error.message || "No fue posible cambiar al rol de conductor.");
+      console.error("Error al activar el rol de conductor:", error);
+      alert(error.message || "Ocurrió un error al cambiar de rol.");
+    } finally {
+      setCambiandoRol(false);
     }
   };
 
@@ -688,6 +674,70 @@ function Aplicacion() {
           </div>
         </div>
       </footer>
+
+      {mostrarModalVehiculo && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-modal-vehiculo"
+          >
+            <button
+              type="button"
+              className="modal-cerrar"
+              onClick={() => setMostrarModalVehiculo(false)}
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
+
+            <h2 id="titulo-modal-vehiculo">
+              Registra tu vehículo
+            </h2>
+
+            <p>
+              Para acceder como conductor y publicar rutas en TdeA GO,
+              primero debes registrar un vehículo en tu cuenta.
+            </p>
+
+            <div className="acciones-modal-vehiculo">
+              <button
+                type="button"
+                onClick={() => {
+                  const usuarioPendiente = {
+                    ...usuario,
+                    rol_solicitado: "conductor",
+                    requiere_vehiculo: true,
+                  };
+
+                  actualizarUsuario(usuarioPendiente);
+
+                  localStorage.setItem(
+                    "tdea_go_registro_pendiente",
+                    JSON.stringify({
+                      correo: usuario.correo || usuario.email,
+                      rol_solicitado: "conductor",
+                    })
+                  );
+
+                  setMostrarModalVehiculo(false);
+                  navegar("/mi-cuenta");
+                }}
+              >
+                Registrar vehículo
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMostrarModalVehiculo(false)}
+              >
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarLogin && (
         <div

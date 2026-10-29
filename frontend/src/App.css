@@ -1524,6 +1524,10 @@ img {
 
 .login-container {
   width: 100%;
+  margin: 0 auto;
+  padding: 28px 24px;
+  border-radius: 20px;
+  box-sizing: border-box;
   padding:
     42px
     42px

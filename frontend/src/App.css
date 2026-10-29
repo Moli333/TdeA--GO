@@ -2906,3 +2906,97 @@ img {
   }
 
 }
+
+
+/* =========================================================
+   MODAL DE REGISTRO DE VEHÍCULO
+   ========================================================= */
+
+.modal-vehiculo {
+  width: min(100%, 520px);
+  padding: 30px;
+  border-radius: 22px;
+}
+
+.modal-vehiculo h2 {
+  margin: 8px 0 12px;
+  color: var(--azul-oscuro);
+  font-size: 25px;
+  line-height: 1.25;
+}
+
+.modal-vehiculo > p {
+  color: #687b8b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-vehiculo-etiqueta {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--verde);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.acciones-modal-vehiculo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.boton-modal-vehiculo-principal,
+.boton-modal-vehiculo-secundario {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.boton-modal-vehiculo-principal {
+  border: 1px solid var(--verde);
+  background: var(--verde);
+  color: #fff;
+}
+
+.boton-modal-vehiculo-principal:hover {
+  border-color: #07877d;
+  background: #07877d;
+}
+
+.boton-modal-vehiculo-secundario {
+  margin-top: 10px;
+  border: 1px solid #dce5eb;
+  background: #fff;
+  color: #526777;
+}
+
+.boton-modal-vehiculo-secundario:hover {
+  background: #f5f8fa;
+}
+
+.boton-modal-vehiculo-secundario:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.modal-vehiculo-procesando {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #edf7f5;
+  color: var(--verde);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .modal-vehiculo {
+    padding: 24px 19px;
+  }
+}

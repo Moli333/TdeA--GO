@@ -1,6 +1,7 @@
 
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
+import RegistrarVehiculo from "./paginas/RegistrarVehiculo";
 
 import {
   BrowserRouter,
@@ -102,6 +103,10 @@ function Aplicacion() {
   const [mostrarModalVehiculo, setMostrarModalVehiculo] = useState(false);
   const [cambiandoRol, setCambiandoRol] = useState(false);
   const contenedorUsuarioRef = useRef(null);
+
+  const [mostrarFormularioVehiculo, setMostrarFormularioVehiculo] =
+    useState(false);
+  const [registrandoVehiculo, setRegistrandoVehiculo] = useState(false);
 
   const navegar = useNavigate();
   const ubicacion = useLocation();
@@ -333,6 +338,78 @@ function Aplicacion() {
       setCambiandoRol(false);
     }
   };
+
+  const manejarVehiculoRegistradoEnModal = async (vehiculo) => {
+    if (registrandoVehiculo) return;
+
+    // Verifica que el formulario haya entregado el vehículo registrado.
+    if (!vehiculo || typeof vehiculo !== "object") {
+      alert(
+        "No se recibieron los datos del vehículo. Verifica el registro e inténtalo nuevamente."
+      );
+      return;
+    }
+
+    const idUsuario = usuario?.id || usuario?.id_usuario;
+
+    if (!idUsuario) {
+      alert("No se pudo identificar tu cuenta. Inicia sesión nuevamente.");
+      return;
+    }
+
+    try {
+      setRegistrandoVehiculo(true);
+
+      const respuesta = await fetch(
+        `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ rol: "conductor" }),
+        }
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje ||
+          "El vehículo se guardó, pero no fue posible activar el rol de conductor."
+        );
+      }
+
+      const usuarioActualizado = {
+        ...usuario,
+        ...(datos.usuario || datos.perfil || {}),
+        rol: "conductor",
+        rol_solicitado: "conductor",
+        requiere_vehiculo: false,
+      };
+
+      actualizarUsuario(usuarioActualizado);
+
+      localStorage.removeItem("tdea_go_registro_pendiente");
+
+      setMostrarFormularioVehiculo(false);
+      setMostrarModalVehiculo(false);
+
+      navegar("/mis-rutas");
+    } catch (error) {
+      console.error(
+        "Error al activar el rol después de registrar el vehículo:",
+        error
+      );
+
+      alert(
+        `El vehículo se guardó, pero no fue posible activar el rol de conductor. ${error.message}`
+      );
+    } finally {
+      setRegistrandoVehiculo(false);
+    }
+  };
+
 
   const irAlServicio = (ruta) => {
     setMostrarMenuUsuario(false);
@@ -676,9 +753,20 @@ function Aplicacion() {
       </footer>
 
       {mostrarModalVehiculo && (
-        <div className="modal-overlay">
+        <div
+          className="modal-overlay"
+          onMouseDown={(evento) => {
+            if (
+              evento.target === evento.currentTarget &&
+              !registrandoVehiculo
+            ) {
+              setMostrarFormularioVehiculo(false);
+              setMostrarModalVehiculo(false);
+            }
+          }}
+        >
           <div
-            className="modal-card"
+            className="modal-card modal-vehiculo"
             role="dialog"
             aria-modal="true"
             aria-labelledby="titulo-modal-vehiculo"
@@ -686,55 +774,88 @@ function Aplicacion() {
             <button
               type="button"
               className="modal-cerrar"
-              onClick={() => setMostrarModalVehiculo(false)}
+              onClick={() => {
+                if (registrandoVehiculo) return;
+
+                setMostrarFormularioVehiculo(false);
+                setMostrarModalVehiculo(false);
+              }}
               aria-label="Cerrar"
+              disabled={registrandoVehiculo}
             >
               ×
             </button>
 
-            <h2 id="titulo-modal-vehiculo">
-              Registra tu vehículo
-            </h2>
+            {!mostrarFormularioVehiculo ? (
+              <>
+                <span className="modal-vehiculo-etiqueta">
+                  PERFIL DE CONDUCTOR
+                </span>
 
-            <p>
-              Para acceder como conductor y publicar rutas en TdeA GO,
-              primero debes registrar un vehículo en tu cuenta.
-            </p>
+                <h2 id="titulo-modal-vehiculo">
+                  Registra tu vehículo
+                </h2>
 
-            <div className="acciones-modal-vehiculo">
-              <button
-                type="button"
-                onClick={() => {
-                  const usuarioPendiente = {
-                    ...usuario,
-                    rol_solicitado: "conductor",
-                    requiere_vehiculo: true,
-                  };
+                <p>
+                  Para publicar rutas en TdeA GO, primero debes registrar
+                  los datos de tu vehículo.
+                </p>
 
-                  actualizarUsuario(usuarioPendiente);
+                <div className="acciones-modal-vehiculo">
+                  <button
+                    type="button"
+                    className="boton-modal-vehiculo-principal"
+                    onClick={() => setMostrarFormularioVehiculo(true)}
+                  >
+                    Registrar vehículo
+                  </button>
 
-                  localStorage.setItem(
-                    "tdea_go_registro_pendiente",
-                    JSON.stringify({
-                      correo: usuario.correo || usuario.email,
-                      rol_solicitado: "conductor",
-                    })
-                  );
+                  <button
+                    type="button"
+                    className="boton-modal-vehiculo-secundario"
+                    onClick={() => setMostrarModalVehiculo(false)}
+                  >
+                    Ahora no
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="modal-vehiculo-etiqueta">
+                  DATOS DEL VEHÍCULO
+                </span>
 
-                  setMostrarModalVehiculo(false);
-                  navegar("/mi-cuenta");
-                }}
-              >
-                Registrar vehículo
-              </button>
+                <h2 id="titulo-modal-vehiculo">
+                  Información del vehículo
+                </h2>
 
-              <button
-                type="button"
-                onClick={() => setMostrarModalVehiculo(false)}
-              >
-                Ahora no
-              </button>
-            </div>
+                <p>
+                  Completa los datos para continuar con la activación
+                  de tu perfil de conductor.
+                </p>
+
+                <RegistrarVehiculo
+                  usuarioId={usuario?.id || usuario?.id_usuario}
+                  API_URL={API_URL}
+                  onVehiculoRegistrado={manejarVehiculoRegistradoEnModal}
+                />
+
+                {registrandoVehiculo && (
+                  <p className="modal-vehiculo-procesando">
+                    Activando tu perfil de conductor...
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="boton-modal-vehiculo-secundario"
+                  disabled={registrandoVehiculo}
+                  onClick={() => setMostrarFormularioVehiculo(false)}
+                >
+                  Volver
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

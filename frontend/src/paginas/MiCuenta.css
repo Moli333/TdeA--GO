@@ -1002,3 +1002,56 @@
     gap: 6px;
   }
 }
+
+.formulario-telefono {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 18px;
+}
+
+.formulario-telefono input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.formulario-telefono input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.boton-guardar-telefono {
+  align-self: flex-start;
+  padding: 11px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boton-guardar-telefono:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mensaje-telefono {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mensaje-telefono-error {
+  color: #b91c1c;
+}
+
+.mensaje-telefono-exito {
+  color: #15803d;
+}

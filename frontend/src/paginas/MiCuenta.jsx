@@ -37,6 +37,11 @@ function MiCuenta({
   const rolActual = usuario?.rol?.toLowerCase() || "pasajero";
   const esConductor = rolActual === "conductor";
 
+  const [telefono, setTelefono] = useState(usuario?.telefono || "");
+  const [guardandoTelefono, setGuardandoTelefono] = useState(false);
+  const [mensajeTelefono, setMensajeTelefono] = useState("");
+  const [errorTelefono, setErrorTelefono] = useState(false);
+
   function detenerCamara() {
     if (flujoCamaraRef.current) {
       flujoCamaraRef.current.getTracks().forEach((track) => track.stop());
@@ -57,6 +62,79 @@ function MiCuenta({
       urlPreviaRef.current = null;
     }
   }
+
+  const guardarTelefono = async (e) => {
+    e.preventDefault();
+
+    const telefonoLimpio = telefono.trim();
+
+    if (!telefonoLimpio) {
+      setErrorTelefono(true);
+      setMensajeTelefono("Ingresa tu número de teléfono.");
+      return;
+    }
+
+    if (!/^[0-9+\s()-]{7,20}$/.test(telefonoLimpio)) {
+      setErrorTelefono(true);
+      setMensajeTelefono("Ingresa un número de teléfono válido.");
+      return;
+    }
+
+    if (!idUsuario) {
+      setErrorTelefono(true);
+      setMensajeTelefono("No se identificó al usuario.");
+      return;
+    }
+
+    try {
+      setGuardandoTelefono(true);
+      setMensajeTelefono("");
+      setErrorTelefono(false);
+
+      const respuesta = await fetch(
+        `${API_URL}/api/usuarios/${idUsuario}/telefono`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            telefono: telefonoLimpio,
+          }),
+        }
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          resultado.mensaje || "No fue posible guardar el teléfono."
+        );
+      }
+
+      const usuarioActualizado = {
+        ...usuario,
+        ...resultado.usuario,
+        telefono: resultado.usuario?.telefono ?? telefonoLimpio,
+      };
+
+      actualizarUsuario?.(usuarioActualizado);
+      localStorage.setItem(
+        "tdea_go_usuario",
+        JSON.stringify(usuarioActualizado)
+      );
+
+      setTelefono(usuarioActualizado.telefono);
+      setMensajeTelefono("Teléfono actualizado correctamente.");
+    } catch (error) {
+      setErrorTelefono(true);
+      setMensajeTelefono(
+        error.message || "Ocurrió un error al guardar el teléfono."
+      );
+    } finally {
+      setGuardandoTelefono(false);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -520,15 +598,64 @@ function MiCuenta({
               </p>
             )}
 
+
             <div className="perfil-datos">
+              <div className="dato-perfil">
+                <span className="dato-etiqueta">Nombre completo</span>
+                <strong>{nombreUsuario}</strong>
+              </div>
+
               <div className="dato-perfil">
                 <span className="dato-etiqueta">Correo electrónico</span>
                 <strong>{correoUsuario}</strong>
               </div>
+
               <div className="dato-perfil">
                 <span className="dato-etiqueta">Tipo de cuenta</span>
                 <strong>{esConductor ? "Conductor" : "Pasajero"}</strong>
               </div>
+
+              <form className="formulario-telefono" onSubmit={guardarTelefono}>
+                <label className="dato-etiqueta" htmlFor="telefono-perfil">
+                  Número de teléfono
+                </label>
+
+                <input
+                  id="telefono-perfil"
+                  type="tel"
+                  value={telefono}
+                  onChange={(e) => {
+                    setTelefono(e.target.value);
+                    setMensajeTelefono("");
+                    setErrorTelefono(false);
+                  }}
+                  placeholder="Ingresa tu número de teléfono"
+                  autoComplete="tel"
+                  maxLength={20}
+                  required
+                />
+
+                {mensajeTelefono && (
+                  <p
+                    className={
+                      errorTelefono
+                        ? "mensaje-telefono mensaje-telefono-error"
+                        : "mensaje-telefono mensaje-telefono-exito"
+                    }
+                    role="status"
+                  >
+                    {mensajeTelefono}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  className="boton-guardar-telefono"
+                  disabled={guardandoTelefono}
+                >
+                  {guardandoTelefono ? "Guardando..." : "Guardar teléfono"}
+                </button>
+              </form>
             </div>
           </article>
 

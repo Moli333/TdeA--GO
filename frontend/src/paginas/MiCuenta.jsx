@@ -311,37 +311,79 @@ function MiCuenta({
     }
   }
 
-  async function manejarVehiculoRegistrado(vehiculo) {
+
+  async function manejarVehiculoRegistrado(vehiculoRegistrado) {
     try {
-      const respuesta = await fetch(`${API_URL}/api/usuarios/${idUsuario}/rol`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rol: "conductor" }),
-      });
+      setMensajeFoto("");
+      setTipoMensajeFoto("");
 
-      const datos = await respuesta.json();
+      // 1. Consultar nuevamente el vehículo guardado en la base de datos.
+      const respuestaVehiculo = await fetch(
+        `${API_URL}/api/vehiculos/${encodeURIComponent(idUsuario)}`
+      );
 
-      if (!respuesta.ok) {
-        throw new Error(datos.mensaje || "No fue posible activar el rol de conductor.");
+      const datosVehiculo = await respuestaVehiculo.json();
+
+      if (!respuestaVehiculo.ok) {
+        throw new Error(
+          datosVehiculo.mensaje ||
+          "No fue posible consultar el vehículo registrado."
+        );
       }
 
+      const vehiculoActual =
+        datosVehiculo.vehiculo || vehiculoRegistrado || null;
+
+      if (!vehiculoActual) {
+        throw new Error(
+          "El vehículo se registró, pero no fue posible recuperarlo de la base de datos."
+        );
+      }
+
+      // 2. Activar el rol de conductor.
+      const respuestaRol = await fetch(
+        `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rol: "conductor",
+          }),
+        }
+      );
+
+      const datosRol = await respuestaRol.json();
+
+      if (!respuestaRol.ok) {
+        throw new Error(
+          datosRol.mensaje ||
+          "No fue posible activar el rol de conductor."
+        );
+      }
+
+      // 3. Guardar el perfil y los datos del vehículo en el estado del usuario.
       actualizarUsuario?.({
-        ...(datos.usuario || {}),
+        ...(datosRol.usuario || usuario),
         rol: "conductor",
         rol_solicitado: "conductor",
         requiere_vehiculo: false,
+        vehiculo: datosRol.usuario?.vehiculo || vehiculoActual,
       });
 
-      setMensajeFoto("");
-      console.log("Vehículo registrado correctamente:", vehiculo);
+      setMensajeFoto("Vehículo reconocido y rol de conductor activado correctamente.");
+      setTipoMensajeFoto("exito");
+
+      console.log("Vehículo reconocido correctamente:", vehiculoActual);
     } catch (error) {
-      console.error("Error al activar el rol de conductor:", error);
-      setMensajeFoto(
-        `El vehículo se registró, pero no fue posible activar el rol de conductor: ${error.message}`
-      );
+      console.error("Error al actualizar el vehículo o el rol:", error);
+
+      setMensajeFoto(error.message || "No fue posible actualizar la información del vehículo.");
       setTipoMensajeFoto("error");
     }
   }
+
 
   if (!usuario) {
     return (

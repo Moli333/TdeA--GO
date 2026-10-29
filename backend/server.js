@@ -362,9 +362,10 @@ app.post("/api/login", async (req, res) => {
       error: errorVehiculo,
     } = await dbClient
       .from("vehiculos")
-      .select("id")
+      .select(
+        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
+      )
       .eq("usuario_id", profile.id)
-      .limit(1)
       .maybeSingle();
 
     if (errorVehiculo) {
@@ -390,7 +391,7 @@ app.post("/api/login", async (req, res) => {
       } = await dbClient
         .from("profiles")
         .update({ rol: "conductor" })
-        .eq("id", user.id)
+        .eq("id", profile.id)
         .select()
         .single();
 
@@ -415,6 +416,8 @@ app.post("/api/login", async (req, res) => {
         profile.rol === "conductor"
       ) && !vehiculo;
 
+
+
     return res.status(200).json({
       mensaje: "Inicio de sesión exitoso.",
       token: authData.session?.access_token,
@@ -422,8 +425,10 @@ app.post("/api/login", async (req, res) => {
         ...profile,
         rol_solicitado: rolSolicitado,
         requiere_vehiculo: requiereVehiculo,
+        vehiculo: vehiculo ?? null,
       },
     });
+
   } catch (error) {
     console.error("Error en /api/login:", error);
 
@@ -1176,36 +1181,6 @@ app.use((error, req, res, next) => {
 });
 
 
-app.get("/api/vehiculos/:usuarioId", async (req, res) => {
-  try {
-    const { usuarioId } = req.params;
-
-    const { data, error } = await dbClient
-      .from("vehiculos")
-      .select(
-        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
-      )
-      .eq("usuario_id", usuarioId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Error al consultar vehículo:", error);
-      return res.status(500).json({
-        mensaje: "No fue posible consultar el vehículo registrado.",
-      });
-    }
-
-    return res.status(200).json({
-      vehiculo: data || null,
-    });
-  } catch (error) {
-    console.error("Error inesperado al consultar vehículo:", error);
-    return res.status(500).json({
-      mensaje: "Ocurrió un error al consultar el vehículo.",
-    });
-  }
-});
-
 // ------------------------------------------------------------------
 // 13. REGISTRAR O ACTUALIZAR VEHÍCULO
 // POST /api/vehiculos
@@ -1272,13 +1247,19 @@ app.post("/api/vehiculos", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 13. CONSULTAR VEHÍCULO DE UN USUARIO
+// CONSULTAR VEHÍCULO DE UN USUARIO
 // GET /api/vehiculos/:usuarioId
 // ------------------------------------------------------------------
 
 app.get("/api/vehiculos/:usuarioId", async (req, res) => {
   try {
     const { usuarioId } = req.params;
+
+    if (!usuarioId) {
+      return res.status(400).json({
+        mensaje: "El ID del usuario es obligatorio.",
+      });
+    }
 
     const { data, error } = await dbClient
       .from("vehiculos")
@@ -1297,10 +1278,10 @@ app.get("/api/vehiculos/:usuarioId", async (req, res) => {
     }
 
     return res.status(200).json({
-      vehiculo: data || null,
+      vehiculo: data ?? null,
     });
   } catch (error) {
-    console.error("Error consultando vehículo:", error);
+    console.error("Error inesperado consultando vehículo:", error);
 
     return res.status(500).json({
       mensaje: "Ocurrió un error al consultar el vehículo.",

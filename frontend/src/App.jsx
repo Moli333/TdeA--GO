@@ -1,3 +1,4 @@
+
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
 
@@ -22,7 +23,6 @@ import MisRutas from "./paginas/MisRutas";
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Recupera el usuario antes del primer renderizado.
 function cargarUsuarioGuardado() {
   const usuarioGuardado = localStorage.getItem("tdea_go_usuario");
 
@@ -75,8 +75,6 @@ function cargarUsuarioGuardado() {
   }
 }
 
-// Componente declarado fuera de Aplicacion para evitar
-// que React lo vuelva a crear en cada renderizado.
 function RutaSoloConductor({
   usuario,
   requiereRegistroVehiculo,
@@ -101,14 +99,13 @@ function Aplicacion() {
   const [usuario, setUsuario] = useState(cargarUsuarioGuardado);
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
-  const [mostrarMenuMovil, setMostrarMenuMovil] = useState(false);
 
   const contenedorUsuarioRef = useRef(null);
 
   const navegar = useNavigate();
   const ubicacion = useLocation();
 
-  // Cierra el menú del usuario cuando se hace clic fuera.
+  // Cierra el menú al hacer clic fuera de él.
   useEffect(() => {
     const cerrarMenuAlHacerClicFuera = (evento) => {
       if (
@@ -153,7 +150,7 @@ function Aplicacion() {
     )
   );
 
-  // Redirige al registro del vehículo cuando sea necesario.
+  // Redirige a Mi cuenta si el usuario debe registrar su vehículo.
   useEffect(() => {
     if (
       requiereRegistroVehiculo &&
@@ -233,7 +230,6 @@ function Aplicacion() {
 
     setMostrarLogin(false);
     setMostrarMenuUsuario(false);
-    setMostrarMenuMovil(false);
 
     navegar(
       usuarioFinal.requiere_vehiculo
@@ -247,7 +243,6 @@ function Aplicacion() {
 
     setUsuario(null);
     setMostrarMenuUsuario(false);
-    setMostrarMenuMovil(false);
 
     navegar("/");
   };
@@ -258,7 +253,6 @@ function Aplicacion() {
     }
 
     setMostrarMenuUsuario(false);
-    setMostrarMenuMovil(false);
 
     if (nuevoRol === "conductor") {
       navegar("/mi-cuenta");
@@ -277,7 +271,6 @@ function Aplicacion() {
   };
 
   const irAlServicio = (ruta) => {
-    setMostrarMenuMovil(false);
     setMostrarMenuUsuario(false);
 
     if (!usuario) {
@@ -290,12 +283,6 @@ function Aplicacion() {
       return;
     }
 
-    navegar(ruta);
-  };
-
-  const navegarMenuMovil = (ruta) => {
-    setMostrarMenuMovil(false);
-    setMostrarMenuUsuario(false);
     navegar(ruta);
   };
 
@@ -313,8 +300,8 @@ function Aplicacion() {
 
   const esConductor = obtenerRolUsuario() === "conductor";
   const esPasajero = obtenerRolUsuario() === "pasajero";
-
   const fotoUsuario = usuario?.foto_url || null;
+
   return (
     <div className="app">
       <header className="encabezado">
@@ -322,10 +309,7 @@ function Aplicacion() {
           <Link
             to="/"
             className="marca-tdea"
-            onClick={() => {
-              setMostrarMenuUsuario(false);
-              setMostrarMenuMovil(false);
-            }}
+            onClick={() => setMostrarMenuUsuario(false)}
           >
             <span className="marca-tdea-principal" translate="no">
               TdeA
@@ -337,144 +321,16 @@ function Aplicacion() {
           </Link>
 
           <nav className="navegacion-principal">
-            <Link
-              to="/"
-              className="enlace-navegacion"
-              onClick={() => {
-                setMostrarMenuUsuario(false);
-                setMostrarMenuMovil(false);
-              }}
-            >
-              Inicio
-            </Link>
-
-            <button
-              className="enlace-navegacion boton-navegacion"
-              onClick={() => irAlServicio("/buscar")}
-            >
-              Buscar ruta
-            </button>
-
-            {esConductor && (
-              <>
-                <button
-                  className="enlace-navegacion boton-navegacion"
-                  onClick={() => irAlServicio("/publicar")}
-                >
-                  Publicar ruta
-                </button>
-
-                <button
-                  className="enlace-navegacion boton-navegacion"
-                  onClick={() => irAlServicio("/mis-rutas")}
-                >
-                  Mis rutas
-                </button>
-              </>
-            )}
-
-            {esPasajero && (
-              <button
-                className="enlace-navegacion boton-navegacion"
-                onClick={() => irAlServicio("/mis-solicitudes")}
+            {!usuario && (
+              <Link
+                to="/"
+                className="enlace-navegacion"
+                onClick={() => setMostrarMenuUsuario(false)}
               >
-                Mis solicitudes
-              </button>
-            )}
-
-            {usuario && (
-              <button
-                className="enlace-navegacion boton-navegacion"
-                onClick={() => {
-                  setMostrarMenuUsuario(false);
-                  navegar("/mi-cuenta");
-                }}
-              >
-                Mi cuenta
-              </button>
+                Inicio
+              </Link>
             )}
           </nav>
-
-          <div className="menu-movil">
-            <button
-              className="boton-menu-movil"
-              onClick={() => setMostrarMenuMovil((actual) => !actual)}
-              aria-expanded={mostrarMenuMovil}
-              aria-label="Abrir menú de navegación"
-            >
-              <span className="icono-menu-movil">
-                {mostrarMenuMovil ? "×" : "☰"}
-              </span>
-
-              <span>Menú</span>
-            </button>
-
-            {mostrarMenuMovil && (
-              <div className="lista-menu-movil">
-                <button
-                  className="opcion-menu-movil"
-                  onClick={() => navegarMenuMovil("/")}
-                >
-                  Inicio
-                </button>
-
-                <button
-                  className="opcion-menu-movil"
-                  onClick={() => irAlServicio("/buscar")}
-                >
-                  Buscar ruta
-                </button>
-
-                {esConductor && (
-                  <>
-                    <button
-                      className="opcion-menu-movil"
-                      onClick={() => irAlServicio("/publicar")}
-                    >
-                      Publicar ruta
-                    </button>
-
-                    <button
-                      className="opcion-menu-movil"
-                      onClick={() => irAlServicio("/mis-rutas")}
-                    >
-                      Mis rutas
-                    </button>
-                  </>
-                )}
-
-                {esPasajero && (
-                  <button
-                    className="opcion-menu-movil"
-                    onClick={() => irAlServicio("/mis-solicitudes")}
-                  >
-                    Mis solicitudes
-                  </button>
-                )}
-
-                {usuario && (
-                  <button
-                    className="opcion-menu-movil"
-                    onClick={() => navegarMenuMovil("/mi-cuenta")}
-                  >
-                    Mi cuenta
-                  </button>
-                )}
-
-                {!usuario && (
-                  <button
-                    className="opcion-menu-movil opcion-login-movil"
-                    onClick={() => {
-                      setMostrarMenuMovil(false);
-                      setMostrarLogin(true);
-                    }}
-                  >
-                    Iniciar sesión
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
 
           <div className="acciones-encabezado">
             {usuario ? (
@@ -483,6 +339,7 @@ function Aplicacion() {
                 ref={contenedorUsuarioRef}
               >
                 <button
+                  type="button"
                   className="usuario-activo"
                   onClick={() =>
                     setMostrarMenuUsuario((actual) => !actual)
@@ -496,11 +353,6 @@ function Aplicacion() {
                         src={fotoUsuario}
                         alt={`Foto de ${obtenerNombreUsuario()}`}
                         onError={(evento) => {
-                          console.error(
-                            "No fue posible cargar la foto del encabezado:",
-                            fotoUsuario
-                          );
-
                           evento.currentTarget.style.display = "none";
                         }}
                       />
@@ -528,18 +380,57 @@ function Aplicacion() {
                       </span>
                     </div>
 
-                    <button
+                    <Link
+                      to="/buscar"
                       className="opcion-menu-usuario"
-                      onClick={() => {
-                        setMostrarMenuUsuario(false);
-                        navegar("/mi-cuenta");
-                      }}
+                      onClick={() => setMostrarMenuUsuario(false)}
+                    >
+                      Buscar ruta
+                    </Link>
+
+                    {esConductor && (
+                      <>
+                        <Link
+                          to="/publicar"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Publicar ruta
+                        </Link>
+
+                        <Link
+                          to="/mis-rutas"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Mis rutas
+                        </Link>
+                      </>
+                    )}
+
+                    {esPasajero && (
+                      <Link
+                        to="/mis-solicitudes"
+                        className="opcion-menu-usuario"
+                        onClick={() => setMostrarMenuUsuario(false)}
+                      >
+                        Mis solicitudes
+                      </Link>
+                    )}
+
+                    <Link
+                      to="/mi-cuenta"
+                      className="opcion-menu-usuario"
+                      onClick={() => setMostrarMenuUsuario(false)}
                     >
                       Mi cuenta
-                    </button>
+                    </Link>
+
+                    <div className="separador-menu" />
 
                     {esPasajero && (
                       <button
+                        type="button"
                         className="opcion-menu-usuario opcion-cambio-rol"
                         onClick={() => cambiarRol("conductor")}
                       >
@@ -556,6 +447,7 @@ function Aplicacion() {
 
                     {esConductor && (
                       <button
+                        type="button"
                         className="opcion-menu-usuario opcion-cambio-rol"
                         onClick={() => cambiarRol("pasajero")}
                       >
@@ -571,6 +463,7 @@ function Aplicacion() {
                     <div className="separador-menu" />
 
                     <button
+                      type="button"
                       className="opcion-menu-usuario opcion-cerrar-sesion"
                       onClick={cerrarSesion}
                     >
@@ -581,6 +474,7 @@ function Aplicacion() {
               </div>
             ) : (
               <button
+                type="button"
                 className="boton-login-header"
                 onClick={() => setMostrarLogin(true)}
               >
@@ -590,6 +484,7 @@ function Aplicacion() {
           </div>
         </div>
       </header>
+
       <main>
         <Routes>
           <Route
@@ -688,6 +583,7 @@ function Aplicacion() {
           />
         </Routes>
       </main>
+
       <footer className="pie-pagina">
         <div className="contenedor pie-contenido">
           <div>
@@ -726,6 +622,7 @@ function Aplicacion() {
         >
           <div className="modal-card">
             <button
+              type="button"
               className="modal-cerrar"
               onClick={() => setMostrarLogin(false)}
               aria-label="Cerrar"

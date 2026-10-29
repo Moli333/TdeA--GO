@@ -538,6 +538,63 @@ app.put("/api/usuarios/:id/rol", async (req, res) => {
     });
   }
 });
+
+// ------------------------------------------------------------------
+// ACTUALIZAR TELÉFONO DEL PERFIL
+// PUT /api/usuarios/:id/telefono
+// ------------------------------------------------------------------
+
+app.put("/api/usuarios/:id/telefono", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const telefono = String(req.body.telefono ?? "").trim();
+
+    if (!telefono) {
+      return res.status(400).json({
+        mensaje: "Debes ingresar un número de teléfono.",
+      });
+    }
+
+    if (!/^[0-9+\s()-]{7,20}$/.test(telefono)) {
+      return res.status(400).json({
+        mensaje: "Ingresa un número de teléfono válido.",
+      });
+    }
+
+    const { data, error } = await dbClient
+      .from("profiles")
+      .update({ telefono })
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error actualizando teléfono:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible actualizar el teléfono.",
+      });
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        mensaje: "No se encontró el perfil del usuario.",
+      });
+    }
+
+    return res.json({
+      mensaje: "Teléfono actualizado correctamente.",
+      usuario: data,
+    });
+  } catch (error) {
+    console.error("Error en actualización de teléfono:", error);
+
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al actualizar el teléfono.",
+    });
+  }
+});
+
 // ------------------------------------------------------------------
 // 6. SUBIR / CAMBIAR FOTO DE PERFIL
 // PUT /api/usuarios/:id/foto

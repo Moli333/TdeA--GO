@@ -14,6 +14,7 @@ import {
 } from "react-router-dom";
 
 import Login from "./Login";
+import RestablecerContrasena from "./RestablecerContrasena";
 import Inicio from "./paginas/Inicio";
 import BuscarRuta from "./paginas/BuscarRuta";
 import PublicarRuta from "./paginas/PublicarRuta";
@@ -628,6 +629,10 @@ function Aplicacion() {
 
       <main>
         <Routes>
+          <Route
+            path="/restablecer-contrasena"
+            element={<RestablecerContrasena />}
+          />
           <Route
             path="/"
             element={

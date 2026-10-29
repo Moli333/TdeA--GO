@@ -1,0 +1,254 @@
+
+/* =========================================
+   TdeA GO - Recuperación de contraseña
+   ========================================= */
+
+.login-container {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 12px 4px;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: #172033;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 28px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+}
+
+.login-brand-tdea {
+  color: #174ea6;
+}
+
+.login-brand-go {
+  color: #159447;
+}
+
+.login-header {
+  margin-bottom: 26px;
+  text-align: center;
+}
+
+.login-header h1,
+.login-header h2 {
+  margin: 0 0 10px;
+  color: #172033;
+  font-size: clamp(24px, 5vw, 30px);
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.login-header p {
+  margin: 0;
+  color: #647084;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+  width: 100%;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.login-field label {
+  color: #273449;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.login-field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #d5dce6;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.login-field input:focus {
+  border-color: #245cb5;
+  box-shadow: 0 0 0 3px rgb(36 92 181 / 12%);
+}
+
+.login-field input::placeholder {
+  color: #9aa4b3;
+}
+
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-wrapper input {
+  padding-right: 76px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  padding: 7px 5px;
+  border: none;
+  background: transparent;
+  color: #245cb5;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: #17428a;
+}
+
+.login-field small {
+  color: #68758a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.login-error,
+.login-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.login-error {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #a51d2d;
+}
+
+.login-error-icon {
+  flex-shrink: 0;
+  font-weight: 800;
+}
+
+.login-success {
+  border: 1px solid #b7e4c7;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.login-success-icon {
+  flex-shrink: 0;
+  font-weight: 800;
+}
+
+.login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 49px;
+  padding: 13px 18px;
+  border: none;
+  border-radius: 10px;
+  background: #174ea6;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 5px 12px rgb(23 78 166 / 16%);
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.login-submit:hover:not(:disabled) {
+  background: #123f89;
+  box-shadow: 0 7px 16px rgb(23 78 166 / 22%);
+  transform: translateY(-1px);
+}
+
+.login-submit:focus-visible,
+.password-toggle:focus-visible {
+  outline: 3px solid rgb(21 148 71 / 35%);
+  outline-offset: 3px;
+}
+
+.login-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.login-container button {
+  font-family: inherit;
+}
+
+.login-container * {
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 8px 0;
+  }
+
+  .login-brand {
+    margin-bottom: 22px;
+    font-size: 27px;
+  }
+
+  .login-header {
+    margin-bottom: 22px;
+  }
+
+  .login-header h1,
+  .login-header h2 {
+    font-size: 25px;
+  }
+
+  .login-form {
+    gap: 16px;
+  }
+
+  .login-field input {
+    min-height: 46px;
+  }
+
+  .login-submit {
+    min-height: 47px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-field input,
+  .login-submit {
+    transition: none;
+  }
+}

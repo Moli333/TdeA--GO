@@ -1,10 +1,14 @@
 
 import { useEffect, useState } from "react";
 
-const API_URL =
+const API_URL_PREDETERMINADA =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
+function RegistrarVehiculo({
+  usuarioId,
+  API_URL = API_URL_PREDETERMINADA,
+  onVehiculoRegistrado,
+}) {
   const [tipo, setTipo] = useState("Automóvil");
   const [marcaModelo, setMarcaModelo] = useState("");
   const [placa, setPlaca] = useState("");
@@ -27,13 +31,15 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
       if (!usuarioId) {
         setVehiculo(null);
         setCargandoVehiculo(false);
+        setError("No se identificó al usuario. Cierra sesión e inicia sesión nuevamente si el problema continúa.");
         return;
       }
 
       try {
         const respuesta = await fetch(
-          `${API_URL}/api/vehiculos/${usuarioId}`
+          `${API_URL}/api/vehiculos/${encodeURIComponent(usuarioId)}`
         );
+
         const datos = await respuesta.json();
 
         if (!respuesta.ok) {
@@ -44,26 +50,24 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
 
         if (!activo) return;
 
-        const vehiculoEncontrado = datos.vehiculo || null;
-        setVehiculo(vehiculoEncontrado);
+        const encontrado = datos.vehiculo || null;
+        setVehiculo(encontrado);
 
-        if (vehiculoEncontrado) {
-          setTipo(vehiculoEncontrado.tipo || "Automóvil");
-          setMarcaModelo(vehiculoEncontrado.marca_modelo || "");
-          setPlaca(vehiculoEncontrado.placa || "");
-          setColor(vehiculoEncontrado.color || "");
+        if (encontrado) {
+          setTipo(encontrado.tipo || "Automóvil");
+          setMarcaModelo(encontrado.marca_modelo || "");
+          setPlaca(encontrado.placa || "");
+          setColor(encontrado.color || "");
           setCapacidadMaxima(
-            vehiculoEncontrado.capacidad_maxima != null
-              ? String(vehiculoEncontrado.capacidad_maxima)
+            encontrado.capacidad_maxima != null
+              ? String(encontrado.capacidad_maxima)
               : ""
           );
         }
       } catch (err) {
         if (activo) {
-          console.error("Error al consultar el vehículo:", err);
-          setError(
-            err.message || "Ocurrió un error al consultar el vehículo."
-          );
+          console.error("Error consultando vehículo:", err);
+          setError(err.message || "No fue posible consultar el vehículo.");
         }
       } finally {
         if (activo) setCargandoVehiculo(false);
@@ -75,10 +79,10 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
     return () => {
       activo = false;
     };
-  }, [usuarioId]);
+  }, [usuarioId, API_URL]);
 
-  const manejarEnvio = async (e) => {
-    e.preventDefault();
+  async function guardarVehiculo(evento) {
+    evento.preventDefault();
     setError("");
     setMensaje("");
 
@@ -87,16 +91,15 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
       return;
     }
 
-    if (
-      !marcaModelo.trim() ||
-      !placa.trim() ||
-      !capacidadMaxima ||
-      !Number.isInteger(Number(capacidadMaxima)) ||
-      Number(capacidadMaxima) < 1
-    ) {
-      setError(
-        "Completa la marca/modelo, la placa y una capacidad válida."
-      );
+    const capacidad = Number(capacidadMaxima);
+
+    if (!tipo || !marcaModelo.trim() || !placa.trim() || !color.trim()) {
+      setError("Completa todos los campos del vehículo.");
+      return;
+    }
+
+    if (!Number.isInteger(capacidad) || capacidad < 1) {
+      setError("La capacidad debe ser un número entero mayor que cero.");
       return;
     }
 
@@ -105,16 +108,14 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
 
       const respuesta = await fetch(`${API_URL}/api/vehiculos`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conductor_id: usuarioId,
-          tipo: tipo.trim(),
+          tipo,
           marca_modelo: marcaModelo.trim(),
           placa: placa.trim().toUpperCase(),
-          color: color.trim() || null,
-          capacidad_maxima: Number(capacidadMaxima),
+          color: color.trim(),
+          capacidad_maxima: capacidad,
         }),
       });
 
@@ -126,254 +127,109 @@ function RegistrarVehiculo({ usuarioId, onVehiculoRegistrado }) {
         );
       }
 
-      const vehiculoGuardado = datos.vehiculo;
+      const vehiculoGuardado = datos.vehiculo || {
+        usuario_id: usuarioId,
+        tipo,
+        marca_modelo: marcaModelo.trim(),
+        placa: placa.trim().toUpperCase(),
+        color: color.trim(),
+        capacidad_maxima: capacidad,
+      };
 
       setVehiculo(vehiculoGuardado);
-      setMensaje(
-        "Vehículo " +
-        (vehiculo ? "actualizado" : "registrado") +
-        " correctamente."
-      );
-
-      if (onVehiculoRegistrado) {
-        onVehiculoRegistrado(vehiculoGuardado);
-      }
+      setMensaje("Vehículo guardado correctamente.");
+      onVehiculoRegistrado?.(vehiculoGuardado);
     } catch (err) {
-      console.error("Error al guardar el vehículo:", err);
-      setError(err.message || "Ocurrió un error en el servidor.");
+      console.error("Error guardando vehículo:", err);
+      setError(err.message || "Ocurrió un error al guardar el vehículo.");
     } finally {
       setCargando(false);
     }
-  };
+  }
 
-  const estiloEtiqueta = {
-    display: "block",
-    fontSize: "13px",
-    fontWeight: "600",
-    marginBottom: "5px",
-    color: "#334155",
-  };
-
-  const estiloCampo = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "7px",
-    border: "1px solid #cbd5e1",
-    boxSizing: "border-box",
-    fontSize: "14px",
-    background: "#fff",
-  };
-
-  const estiloDato = {
-    margin: "5px 0 12px",
-    color: "#334155",
-    fontSize: "14px",
-    overflowWrap: "anywhere",
-  };
+  if (cargandoVehiculo) {
+    return (
+      <section className="vehiculo-panel">
+        <p>Consultando la información del vehículo...</p>
+      </section>
+    );
+  }
 
   return (
-    <section
-      className="vehiculo-container"
-      style={{
-        padding: "20px",
-        width: "100%",
-        maxWidth: "460px",
-        margin: "0 auto",
-        boxSizing: "border-box",
-        background: "#fff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-        boxShadow: "0 3px 12px rgba(15, 23, 42, 0.06)",
-      }}
-    >
-      <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#123b65" }}>
-        Mi vehículo
-      </h3>
-
-      <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.5 }}>
-        Consulta y actualiza la información del vehículo que utilizas para
-        publicar tus rutas.
-      </p>
-
-      {cargandoVehiculo ? (
-        <p style={{ fontSize: "14px", color: "#64748b" }}>
-          Consultando información del vehículo...
-        </p>
-      ) : vehiculo ? (
-        <div
-          style={{
-            padding: "15px",
-            margin: "16px 0",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "9px",
-          }}
-        >
-          <p
-            style={{
-              marginTop: 0,
-              marginBottom: "14px",
-              fontWeight: "700",
-              color: "#123b65",
-            }}
-          >
-            Vehículo registrado
-          </p>
-
-          <span style={estiloEtiqueta}>Tipo</span>
-          <p style={estiloDato}>{vehiculo.tipo || "No especificado"}</p>
-
-          <span style={estiloEtiqueta}>Marca y modelo</span>
-          <p style={estiloDato}>
-            {vehiculo.marca_modelo || "No especificado"}
-          </p>
-
-          <span style={estiloEtiqueta}>Placa</span>
-          <p style={estiloDato}>{vehiculo.placa || "No especificada"}</p>
-
-          <span style={estiloEtiqueta}>Color</span>
-          <p style={estiloDato}>{vehiculo.color || "No especificado"}</p>
-
-          <span style={estiloEtiqueta}>Capacidad máxima</span>
-          <p style={{ ...estiloDato, marginBottom: 0 }}>
-            {vehiculo.capacidad_maxima ?? "No especificada"} persona(s)
-          </p>
+    <section className="vehiculo-panel">
+      {vehiculo && (
+        <div className="vehiculo-resumen">
+          <h3>Vehículo registrado</h3>
+          <p><strong>Tipo:</strong> {vehiculo.tipo || "No disponible"}</p>
+          <p><strong>Marca y modelo:</strong> {vehiculo.marca_modelo || "No disponible"}</p>
+          <p><strong>Placa:</strong> {vehiculo.placa || "No disponible"}</p>
+          <p><strong>Color:</strong> {vehiculo.color || "No disponible"}</p>
+          <p><strong>Capacidad:</strong> {vehiculo.capacidad_maxima ?? "No disponible"}</p>
         </div>
-      ) : (
-        <p
-          style={{
-            padding: "12px",
-            background: "#f8fafc",
-            borderRadius: "7px",
-            color: "#64748b",
-            fontSize: "14px",
-          }}
-        >
-          No se encontró un vehículo registrado para este usuario.
-        </p>
       )}
 
-      <h4 style={{ color: "#123b65", marginBottom: "14px" }}>
-        {vehiculo ? "Actualizar datos del vehículo" : "Registrar vehículo"}
-      </h4>
+      <form onSubmit={guardarVehiculo} className="vehiculo-formulario">
+        <h3>{vehiculo ? "Actualizar vehículo" : "Registrar vehículo"}</h3>
 
-      <form
-        onSubmit={manejarEnvio}
-        style={{ display: "flex", flexDirection: "column", gap: "13px" }}
-      >
-        <div>
-          <label style={estiloEtiqueta}>Tipo de vehículo</label>
-          <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            style={estiloCampo}
-            required
-          >
-            <option value="Automóvil">Automóvil</option>
-            <option value="Moto">Moto</option>
-            <option value="Camioneta">Camioneta</option>
-          </select>
-        </div>
-
-        <div>
-          <label style={estiloEtiqueta}>Marca y modelo</label>
-          <input
-            type="text"
-            placeholder="Ej. Chevrolet Spark GT"
-            value={marcaModelo}
-            onChange={(e) => setMarcaModelo(e.target.value)}
-            style={estiloCampo}
-            required
-          />
-        </div>
-
-        <div>
-          <label style={estiloEtiqueta}>Placa</label>
-          <input
-            type="text"
-            placeholder="Ej. ABC123"
-            value={placa}
-            onChange={(e) => setPlaca(e.target.value)}
-            style={estiloCampo}
-            required
-          />
-        </div>
-
-        <div>
-          <label style={estiloEtiqueta}>Color (opcional)</label>
-          <input
-            type="text"
-            placeholder="Ej. Blanco"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            style={estiloCampo}
-          />
-        </div>
-
-        <div>
-          <label style={estiloEtiqueta}>
-            Capacidad máxima de personas
-          </label>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            placeholder="Ej. 4"
-            value={capacidadMaxima}
-            onChange={(e) => setCapacidadMaxima(e.target.value)}
-            style={estiloCampo}
-            required
-          />
-        </div>
-
-        {error && (
-          <p
-            role="alert"
-            style={{
-              color: "#b91c1c",
-              background: "#fef2f2",
-              padding: "10px",
-              borderRadius: "7px",
-              fontSize: "13px",
-              margin: 0,
-            }}
-          >
-            {error}
-          </p>
-        )}
-
-        {mensaje && (
-          <p
-            role="status"
-            style={{
-              color: "#166534",
-              background: "#f0fdf4",
-              padding: "10px",
-              borderRadius: "7px",
-              fontSize: "13px",
-              margin: 0,
-            }}
-          >
-            {mensaje}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={cargando || cargandoVehiculo}
-          style={{
-            background: "#0066cc",
-            color: "#fff",
-            padding: "12px",
-            border: "none",
-            borderRadius: "7px",
-            cursor:
-              cargando || cargandoVehiculo ? "wait" : "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-            opacity: cargando || cargandoVehiculo ? 0.7 : 1,
-          }}
+        <label htmlFor="vehiculo-tipo">Tipo de vehículo</label>
+        <select
+          id="vehiculo-tipo"
+          value={tipo}
+          onChange={(evento) => setTipo(evento.target.value)}
+          required
         >
+          <option value="Automóvil">Automóvil</option>
+          <option value="Motocicleta">Motocicleta</option>
+          <option value="Camioneta">Camioneta</option>
+          <option value="Otro">Otro</option>
+        </select>
+
+        <label htmlFor="vehiculo-marca">Marca y modelo</label>
+        <input
+          id="vehiculo-marca"
+          type="text"
+          value={marcaModelo}
+          onChange={(evento) => setMarcaModelo(evento.target.value)}
+          placeholder="Ej. Chevrolet Onix"
+          required
+        />
+
+        <label htmlFor="vehiculo-placa">Placa</label>
+        <input
+          id="vehiculo-placa"
+          type="text"
+          value={placa}
+          onChange={(evento) => setPlaca(evento.target.value.toUpperCase())}
+          placeholder="Ej. ABC123"
+          required
+        />
+
+        <label htmlFor="vehiculo-color">Color</label>
+        <input
+          id="vehiculo-color"
+          type="text"
+          value={color}
+          onChange={(evento) => setColor(evento.target.value)}
+          placeholder="Color del vehículo"
+          required
+        />
+
+        <label htmlFor="vehiculo-capacidad">Capacidad máxima de pasajeros</label>
+        <input
+          id="vehiculo-capacidad"
+          type="number"
+          min="1"
+          step="1"
+          value={capacidadMaxima}
+          onChange={(evento) => setCapacidadMaxima(evento.target.value)}
+          placeholder="Ej. 4"
+          required
+        />
+
+        {error && <p className="vehiculo-mensaje vehiculo-error">{error}</p>}
+        {mensaje && <p className="vehiculo-mensaje vehiculo-exito">{mensaje}</p>}
+
+        <button type="submit" disabled={cargando}>
           {cargando
             ? "Guardando..."
             : vehiculo

@@ -506,20 +506,24 @@ function MiCuenta({
           </article>
         </div>
 
-        {rolActual === "conductor" && (
-          <section className="seccion-experiencia">
-            <div className="titulo-seccion">
-              <span>MI VEHÍCULO</span>
-              <h2>Información del vehículo</h2>
-            </div>
+        {(
+          esConductor ||
+          usuario?.requiere_vehiculo === true ||
+          usuario?.rol_solicitado?.toLowerCase() === "conductor"
+        ) && (
+            <section className="seccion-experiencia">
+              <div className="titulo-seccion">
+                <span>MI VEHÍCULO</span>
+                <h2>Información del vehículo</h2>
+              </div>
 
-            <RegistrarVehiculo
-              usuarioId={idUsuario}
-              API_URL={API_URL}
-              onVehiculoRegistrado={manejarVehiculoRegistrado}
-            />
-          </section>
-        )}
+              <RegistrarVehiculo
+                usuarioId={idUsuario}
+                API_URL={API_URL}
+                onVehiculoRegistrado={manejarVehiculoRegistrado}
+              />
+            </section>
+          )}
 
         <section className="seccion-configuracion">
           <div className="titulo-seccion">

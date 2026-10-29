@@ -247,27 +247,105 @@ function Aplicacion() {
     navegar("/");
   };
 
-  const cambiarRol = (nuevoRol) => {
-    if (!usuario) {
-      return;
-    }
+  const cambiarRol = async (nuevoRol) => {
+    if (!usuario) return;
 
     setMostrarMenuUsuario(false);
 
-    if (nuevoRol === "conductor") {
-      navegar("/mi-cuenta");
+    if (nuevoRol === "pasajero") {
+      const usuarioActualizado = {
+        ...usuario,
+        rol: "pasajero",
+        rol_solicitado: "pasajero",
+        requiere_vehiculo: false,
+      };
+
+      actualizarUsuario(usuarioActualizado);
+      navegar("/buscar");
       return;
     }
 
-    const usuarioActualizado = {
-      ...usuario,
-      rol: "pasajero",
-      rol_solicitado: "pasajero",
-      requiere_vehiculo: false,
-    };
+    if (nuevoRol !== "conductor") return;
 
-    actualizarUsuario(usuarioActualizado);
-    navegar("/buscar");
+    const idUsuario = usuario.id || usuario.id_usuario;
+
+    if (!idUsuario) {
+      alert("No se pudo identificar tu cuenta. Cierra sesión e inicia nuevamente.");
+      return;
+    }
+
+    try {
+      // Primero comprobamos si ya existe un vehículo registrado.
+      const respuestaVehiculo = await fetch(
+        `${API_URL}/api/vehiculos/${idUsuario}`
+      );
+      const datosVehiculo = await respuestaVehiculo.json();
+
+      if (!respuestaVehiculo.ok) {
+        throw new Error(
+          datosVehiculo.mensaje || "No fue posible consultar tu vehículo."
+        );
+      }
+
+      const vehiculo = datosVehiculo.vehiculo;
+
+      // Si no tiene vehículo, guardamos la solicitud y exigimos el registro.
+      if (!vehiculo) {
+        const usuarioPendiente = {
+          ...usuario,
+          rol_solicitado: "conductor",
+          requiere_vehiculo: true,
+        };
+
+        actualizarUsuario(usuarioPendiente);
+
+        localStorage.setItem(
+          "tdea_go_registro_pendiente",
+          JSON.stringify({
+            correo: usuario.correo || usuario.email,
+            rol_solicitado: "conductor",
+          })
+        );
+
+        navegar("/mi-cuenta");
+        return;
+      }
+
+      // Si ya tiene vehículo, activamos el rol sin cerrar sesión.
+      const respuestaRol = await fetch(
+        `${API_URL}/api/usuarios/${idUsuario}/rol`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rol: "conductor" }),
+        }
+      );
+
+      const datosRol = await respuestaRol.json();
+
+      if (!respuestaRol.ok) {
+        throw new Error(
+          datosRol.mensaje || "No fue posible activar el rol de conductor."
+        );
+      }
+
+      const usuarioActualizado = {
+        ...usuario,
+        ...(datosRol.usuario || datosRol.perfil || {}),
+        rol: "conductor",
+        rol_solicitado: "conductor",
+        requiere_vehiculo: false,
+      };
+
+      actualizarUsuario(usuarioActualizado);
+      localStorage.removeItem("tdea_go_registro_pendiente");
+
+      // Ya puede entrar a las opciones de conductor.
+      navegar("/mis-rutas");
+    } catch (error) {
+      console.error("Error al cambiar al rol de conductor:", error);
+      alert(error.message || "No fue posible cambiar al rol de conductor.");
+    }
   };
 
   const irAlServicio = (ruta) => {

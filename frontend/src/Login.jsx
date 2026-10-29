@@ -1,18 +1,23 @@
 
 import { useState } from "react";
+import { supabase } from "./supabase";
 
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+const cumplePoliticaContrasena = (contrasena) =>
+  contrasena.length >= 8 &&
+  /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(contrasena) &&
+  /\d/.test(contrasena) &&
+  /[^A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s]/.test(contrasena);
+
 function Login({ onLoginExitoso }) {
   const [modo, setModo] = useState("login");
 
-  // Inicio de sesión
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
 
-  // Registro
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -28,15 +33,11 @@ function Login({ onLoginExitoso }) {
     setModo(nuevoModo);
     setError("");
     setMensaje("");
+    setContrasena("");
   };
-
-  // =========================================================
-  // INICIAR SESIÓN
-  // =========================================================
 
   const iniciarSesion = async (e) => {
     e.preventDefault();
-
     setError("");
     setMensaje("");
 
@@ -50,9 +51,7 @@ function Login({ onLoginExitoso }) {
 
       const respuesta = await fetch(`${API_URL}/api/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           correo: correo.trim(),
           contrasena,
@@ -72,22 +71,50 @@ function Login({ onLoginExitoso }) {
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error);
+      setError(error.message || "Ocurrió un error al iniciar sesión.");
+    } finally {
+      setCargando(false);
+    }
+  };
 
+  const enviarRecuperacion = async (e) => {
+    e.preventDefault();
+    setError("");
+    setMensaje("");
+
+    if (!correo.trim()) {
+      setError("Escribe tu correo electrónico para recuperar la contraseña.");
+      return;
+    }
+
+    try {
+      setCargando(true);
+
+      const { error: errorSupabase } =
+        await supabase.auth.resetPasswordForEmail(correo.trim(), {
+          redirectTo: `${window.location.origin}/restablecer-contrasena`,
+        });
+
+      if (errorSupabase) {
+        throw errorSupabase;
+      }
+
+      setMensaje(
+        "Si existe una cuenta asociada a ese correo, recibirás un enlace para restablecer tu contraseña. Revisa también la carpeta de correo no deseado."
+      );
+    } catch (error) {
+      console.error("Error al solicitar recuperación:", error);
       setError(
-        error.message || "Ocurrió un error al iniciar sesión."
+        error.message ||
+          "No fue posible solicitar la recuperación. Inténtalo de nuevo."
       );
     } finally {
       setCargando(false);
     }
   };
 
-  // =========================================================
-  // REGISTRAR USUARIO
-  // =========================================================
-
   const registrarUsuario = async (e) => {
     e.preventDefault();
-
     setError("");
     setMensaje("");
 
@@ -102,8 +129,10 @@ function Login({ onLoginExitoso }) {
       return;
     }
 
-    if (contrasena.length < 6) {
-      setError("La contraseña debe tener mínimo 6 caracteres.");
+    if (!cumplePoliticaContrasena(contrasena)) {
+      setError(
+        "La contraseña debe tener mínimo 8 caracteres e incluir una letra, un número y un símbolo."
+      );
       return;
     }
 
@@ -112,9 +141,7 @@ function Login({ onLoginExitoso }) {
 
       const respuesta = await fetch(`${API_URL}/api/usuarios`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nombre: nombre.trim(),
           apellido: apellido.trim(),
@@ -133,11 +160,8 @@ function Login({ onLoginExitoso }) {
         );
       }
 
-      // Conservar el correo para facilitar el inicio de sesión.
       const correoRegistrado = correo.trim();
 
-      // Guardar el rol pendiente para continuar el flujo
-      // después de confirmar la cuenta.
       localStorage.setItem(
         "tdea_go_registro_pendiente",
         JSON.stringify({
@@ -157,22 +181,13 @@ function Login({ onLoginExitoso }) {
 
       setMensaje(`${mensajeBackend} ${mensajeRol}`);
 
-      // Limpiar los datos personales y la contraseña,
-      // pero mantener el correo para facilitar el acceso.
       setNombre("");
       setApellido("");
       setTelefono("");
       setContrasena("");
-
-      // No cambiar automáticamente al inicio de sesión.
-      // El estudiante podrá leer el mensaje y cambiar de modo
-      // cuando esté listo.
     } catch (error) {
       console.error("Error al registrar usuario:", error);
-
-      setError(
-        error.message || "Ocurrió un error al crear la cuenta."
-      );
+      setError(error.message || "Ocurrió un error al crear la cuenta.");
     } finally {
       setCargando(false);
     }
@@ -195,13 +210,12 @@ function Login({ onLoginExitoso }) {
           <form className="login-form" onSubmit={iniciarSesion}>
             <div className="login-field">
               <label htmlFor="correo">Correo electrónico</label>
-
               <input
                 id="correo"
                 type="email"
                 value={correo}
                 onChange={(e) => setCorreo(e.target.value)}
-                placeholder="tu correo"
+                placeholder="Tu correo electrónico"
                 autoComplete="email"
                 required
               />
@@ -209,7 +223,6 @@ function Login({ onLoginExitoso }) {
 
             <div className="login-field">
               <label htmlFor="contrasena">Contraseña</label>
-
               <div className="password-wrapper">
                 <input
                   id="contrasena"
@@ -220,7 +233,6 @@ function Login({ onLoginExitoso }) {
                   autoComplete="current-password"
                   required
                 />
-
                 <button
                   type="button"
                   className="password-toggle"
@@ -242,11 +254,7 @@ function Login({ onLoginExitoso }) {
               <button
                 type="button"
                 className="forgot-password"
-                onClick={() =>
-                  setError(
-                    "La recuperación de contraseña estará disponible próximamente."
-                  )
-                }
+                onClick={() => cambiarModo("recuperacion")}
               >
                 ¿Olvidaste tu contraseña?
               </button>
@@ -270,12 +278,66 @@ function Login({ onLoginExitoso }) {
 
           <div className="login-register">
             <span>¿No tienes una cuenta?</span>
-
             <button
               type="button"
               onClick={() => cambiarModo("registro")}
             >
               Crear cuenta
+            </button>
+          </div>
+        </>
+      ) : modo === "recuperacion" ? (
+        <>
+          <div className="login-header">
+            <h2>Recuperar contraseña</h2>
+            <p>Te enviaremos un enlace a tu correo electrónico.</p>
+          </div>
+
+          <form className="login-form" onSubmit={enviarRecuperacion}>
+            <div className="login-field">
+              <label htmlFor="correoRecuperacion">
+                Correo electrónico
+              </label>
+              <input
+                id="correoRecuperacion"
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                placeholder="Tu correo electrónico"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="login-error" role="alert">
+                <span className="login-error-icon">!</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            {mensaje && (
+              <div className="login-success" role="status">
+                <span className="login-success-icon">✓</span>
+                <span>{mensaje}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="login-submit"
+              disabled={cargando}
+            >
+              {cargando ? "Enviando..." : "Enviar enlace de recuperación"}
+            </button>
+          </form>
+
+          <div className="login-register">
+            <button
+              type="button"
+              onClick={() => cambiarModo("login")}
+            >
+              Volver a iniciar sesión
             </button>
           </div>
         </>
@@ -293,7 +355,6 @@ function Login({ onLoginExitoso }) {
             <div className="register-grid">
               <div className="login-field">
                 <label htmlFor="nombre">Nombre</label>
-
                 <input
                   id="nombre"
                   type="text"
@@ -307,7 +368,6 @@ function Login({ onLoginExitoso }) {
 
               <div className="login-field">
                 <label htmlFor="apellido">Apellido</label>
-
                 <input
                   id="apellido"
                   type="text"
@@ -321,16 +381,13 @@ function Login({ onLoginExitoso }) {
             </div>
 
             <div className="login-field">
-              <label htmlFor="correoRegistro">
-                Correo electrónico
-              </label>
-
+              <label htmlFor="correoRegistro">Correo electrónico</label>
               <input
                 id="correoRegistro"
                 type="email"
                 value={correo}
                 onChange={(e) => setCorreo(e.target.value)}
-                placeholder="tu correo"
+                placeholder="Tu correo electrónico"
                 autoComplete="email"
                 required
               />
@@ -338,7 +395,6 @@ function Login({ onLoginExitoso }) {
 
             <div className="login-field">
               <label htmlFor="telefono">Teléfono</label>
-
               <input
                 id="telefono"
                 type="tel"
@@ -351,25 +407,19 @@ function Login({ onLoginExitoso }) {
             </div>
 
             <div className="login-field">
-              <label htmlFor="contrasenaRegistro">
-                Contraseña
-              </label>
-
+              <label htmlFor="contrasenaRegistro">Contraseña</label>
               <div className="password-wrapper">
                 <input
                   id="contrasenaRegistro"
                   type={
-                    mostrarContrasenaRegistro
-                      ? "text"
-                      : "password"
+                    mostrarContrasenaRegistro ? "text" : "password"
                   }
                   value={contrasena}
                   onChange={(e) => setContrasena(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres, letra, número y símbolo"
                   autoComplete="new-password"
                   required
                 />
-
                 <button
                   type="button"
                   className="password-toggle"
@@ -391,12 +441,12 @@ function Login({ onLoginExitoso }) {
 
             <div className="role-section">
               <label>Tipo de usuario</label>
-
               <div className="role-options">
                 <button
                   type="button"
-                  className={`role-option ${rol === "pasajero" ? "selected" : ""
-                    }`}
+                  className={`role-option ${
+                    rol === "pasajero" ? "selected" : ""
+                  }`}
                   onClick={() => {
                     setRol("pasajero");
                     setError("");
@@ -404,7 +454,6 @@ function Login({ onLoginExitoso }) {
                   }}
                 >
                   <span className="role-icon">○</span>
-
                   <span>
                     <strong>Pasajero</strong>
                     <small>Busco un cupo</small>
@@ -413,8 +462,9 @@ function Login({ onLoginExitoso }) {
 
                 <button
                   type="button"
-                  className={`role-option ${rol === "conductor" ? "selected" : ""
-                    }`}
+                  className={`role-option ${
+                    rol === "conductor" ? "selected" : ""
+                  }`}
                   onClick={() => {
                     setRol("conductor");
                     setError("");
@@ -422,7 +472,6 @@ function Login({ onLoginExitoso }) {
                   }}
                 >
                   <span className="role-icon">⌁</span>
-
                   <span>
                     <strong>Conductor</strong>
                     <small>Ofrezco un cupo</small>
@@ -442,7 +491,6 @@ function Login({ onLoginExitoso }) {
               <div className="login-success" role="status">
                 <span className="login-success-icon">✓</span>
                 <span>{mensaje}</span>
-
                 <button
                   type="button"
                   onClick={() => cambiarModo("login")}
@@ -472,7 +520,6 @@ function Login({ onLoginExitoso }) {
 
           <div className="login-register">
             <span>¿Ya tienes una cuenta?</span>
-
             <button
               type="button"
               onClick={() => cambiarModo("login")}

@@ -2909,94 +2909,262 @@ img {
 
 
 /* =========================================================
-   MODAL DE REGISTRO DE VEHÍCULO
+  MODAL DE REGISTRO DE VEHÍCULO
    ========================================================= */
 
+/* =========================================================
+   MODAL DE REGISTRO DE VEHÍCULO — TdeA GO
+   ========================================================= */
+
+.modal-overlay:has(.modal-vehiculo) {
+  padding: 20px;
+  background: rgba(9, 31, 52, 0.52);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
 .modal-vehiculo {
-  width: min(100%, 520px);
-  padding: 30px;
-  border-radius: 22px;
+  position: relative;
+  width: min(100%, 460px);
+  max-height: calc(100dvh - 40px);
+  padding: 34px;
+  overflow-y: auto;
+  border: 1px solid rgba(219, 232, 241, 0.9);
+  border-radius: 26px;
+  background: #ffffff;
+  box-shadow:
+    0 30px 90px rgba(5, 35, 60, 0.23),
+    0 8px 24px rgba(5, 35, 60, 0.09);
+  animation: aparecerModalVehiculo 0.28s ease-out;
 }
 
-.modal-vehiculo h2 {
-  margin: 8px 0 12px;
+@keyframes aparecerModalVehiculo {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Botón para cerrar */
+
+.modal-vehiculo .modal-cerrar {
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e8eef3;
+  background: #f7f9fc;
+  color: #647789;
+  font-size: 23px;
+}
+
+.modal-vehiculo .modal-cerrar:hover {
+  background: #eaf2f9;
   color: var(--azul-oscuro);
-  font-size: 25px;
-  line-height: 1.25;
 }
 
-.modal-vehiculo > p {
-  color: #687b8b;
-  font-size: 14px;
-  line-height: 1.6;
-}
+/* Etiqueta superior */
 
 .modal-vehiculo-etiqueta {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--verde);
+  display: inline-flex;
+  align-items: center;
+  min-height: 29px;
+  margin: 2px 0 18px;
+  padding: 7px 11px;
+  border: 1px solid #d9eee8;
+  border-radius: 30px;
+  background: #eff9f5;
+  color: #16805f;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.1px;
 }
+
+/* Título */
+
+.modal-vehiculo h2 {
+  max-width: 350px;
+  margin: 0 0 14px;
+  color: #173c5a;
+  font-size: clamp(25px, 5vw, 30px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+
+/* Texto descriptivo */
+
+.modal-vehiculo > p {
+  margin: 0 0 22px;
+  color: #667b8d;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+/* Botones de la primera pantalla */
 
 .acciones-modal-vehiculo {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: 27px;
 }
 
 .boton-modal-vehiculo-principal,
 .boton-modal-vehiculo-secundario {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  min-height: 44px;
-  padding: 11px 16px;
-  border-radius: 10px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  min-height: 51px;
+  padding: 13px 18px;
+  border-radius: 13px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  text-align: center;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
+/* Acción principal */
+
 .boton-modal-vehiculo-principal {
-  border: 1px solid var(--verde);
-  background: var(--verde);
-  color: #fff;
+  border: 1px solid #2459a9;
+  background: linear-gradient(135deg, #2459a9, #1678ae);
+  color: #ffffff;
+  box-shadow: 0 9px 20px rgba(36, 89, 169, 0.2);
 }
 
 .boton-modal-vehiculo-principal:hover {
-  border-color: #07877d;
-  background: #07877d;
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #1d4d96, #126b9e);
+  box-shadow: 0 12px 25px rgba(36, 89, 169, 0.26);
 }
+
+.boton-modal-vehiculo-principal:active {
+  transform: translateY(0);
+}
+
+/* Acción secundaria */
 
 .boton-modal-vehiculo-secundario {
-  margin-top: 10px;
-  border: 1px solid #dce5eb;
-  background: #fff;
-  color: #526777;
+  min-height: 45px;
+  margin-top: 0;
+  border: 1px solid transparent;
+  background: #ffffff;
+  color: #718196;
+  box-shadow: none;
 }
 
-.boton-modal-vehiculo-secundario:hover {
-  background: #f5f8fa;
+.boton-modal-vehiculo-secundario:hover:not(:disabled) {
+  border-color: #e2eaf1;
+  background: #f5f8fb;
+  color: #36546e;
 }
 
+.boton-modal-vehiculo-principal:focus-visible,
+.boton-modal-vehiculo-secundario:focus-visible {
+  outline: 3px solid rgba(36, 89, 169, 0.2);
+  outline-offset: 3px;
+}
+
+.boton-modal-vehiculo-principal:disabled,
 .boton-modal-vehiculo-secundario:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+  transform: none;
 }
 
-.modal-vehiculo-procesando {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #edf7f5;
-  color: var(--verde);
-  font-size: 12px;
+/* Mensaje de activación */
+
+.modal-vehiculo .modal-vehiculo-procesando {
+  margin: 16px 0;
+  padding: 13px 15px;
+  border: 1px solid #d9eee8;
+  border-radius: 12px;
+  background: #f0faf6;
+  color: #18775d;
+  font-size: 13px;
+  line-height: 1.5;
 }
+
+/* Formulario del vehículo dentro del modal */
+
+.modal-vehiculo .vehiculo-panel {
+  width: 100%;
+  max-width: none;
+  margin: 20px 0 16px;
+  padding: 20px;
+  border: 1px solid #e5edf3;
+  border-radius: 16px;
+  background: #f9fbfd;
+  box-shadow: none;
+}
+
+.modal-vehiculo .vehiculo-panel button {
+  max-width: 100%;
+}
+
+/* Adaptación a celulares */
 
 @media (max-width: 520px) {
+  .modal-overlay:has(.modal-vehiculo) {
+    padding: 14px;
+  }
+
   .modal-vehiculo {
-    padding: 24px 19px;
+    width: 100%;
+    max-height: calc(100dvh - 28px);
+    padding: 29px 22px 23px;
+    border-radius: 22px;
+  }
+
+  .modal-vehiculo .modal-cerrar {
+    top: 12px;
+    right: 12px;
+  }
+
+  .modal-vehiculo-etiqueta {
+    margin-bottom: 16px;
+  }
+
+  .modal-vehiculo h2 {
+    padding-right: 5px;
+    font-size: 25px;
+  }
+
+  .modal-vehiculo > p {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .acciones-modal-vehiculo {
+    margin-top: 23px;
+    gap: 9px;
+  }
+
+  .modal-vehiculo .vehiculo-panel {
+    padding: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-vehiculo {
+    animation: none;
+  }
+
+  .boton-modal-vehiculo-principal,
+  .boton-modal-vehiculo-secundario {
+    transition: none;
   }
 }

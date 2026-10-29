@@ -105,8 +105,8 @@
 
 
 .avatar-grande {
-  width: 60px;
-  height: 50px;
+  width: 100px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -115,7 +115,7 @@
   border-radius: 100%;
   background: linear-gradient(135deg, var(--azul), var(--verde));
   color: #ffffff;
-  font-size: 13px;
+  font-size: 25px;
   font-weight: 400;
 }
 
@@ -176,7 +176,7 @@
   transform: translateX(-50%);
 
   border: 1px solid #e0e9ee;
-  border-radius: 11px;
+  border-radius: 13px;
 
   background: #ffffff;
 
@@ -896,4 +896,109 @@
     width: 100%;
   }
 
+}
+
+/* =====================================================
+   MEJORAS VISUALES - TDEA GO
+   Perfil, fotografías y formulario del vehículo
+   ===================================================== */
+
+/* Foto circular en Mi cuenta */
+.avatar-grande {
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 3px solid #ffffff;
+  outline: 1px solid #d9e7ef;
+  background: #eaf5f7;
+  color: #075985;
+  font-size: 22px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(10, 55, 90, 0.12);
+}
+
+.avatar-grande img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 50%;
+}
+
+/* Área de foto y botón */
+.zona-foto-perfil {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.boton-cambiar-foto {
+  border: none;
+  background: transparent;
+  color: #087f8c;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 8px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.boton-cambiar-foto:hover {
+  background: #e8f6f5;
+  color: #075985;
+}
+
+/* Formulario del vehículo: mejora los controles nativos */
+.mi-cuenta-pagina input:not([type="file"]):not([type="checkbox"]),
+.mi-cuenta-pagina select,
+.mi-cuenta-pagina textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 13px;
+  border: 1px solid #d5e1e9;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #17324d;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mi-cuenta-pagina input:focus,
+.mi-cuenta-pagina select:focus,
+.mi-cuenta-pagina textarea:focus {
+  border-color: #078b91;
+  box-shadow: 0 0 0 3px rgba(7, 139, 145, 0.12);
+}
+
+.mi-cuenta-pagina button {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Adaptación a pantallas pequeñas */
+@media (max-width: 640px) {
+  .avatar-grande {
+    width: 70px;
+    height: 70px;
+    min-width: 70px;
+  }
+
+  .zona-foto-perfil {
+    gap: 6px;
+  }
 }

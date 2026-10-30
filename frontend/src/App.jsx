@@ -2,6 +2,8 @@
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
 import RegistrarVehiculo from "./paginas/RegistrarVehiculo";
+import SolicitarViajeNuevo from "./paginas/SolicitarViajeNuevo";
+import MisSolicitudesNuevas from "./paginas/MisSolicitudesNuevas";
 
 import {
   BrowserRouter,
@@ -559,6 +561,20 @@ function Aplicacion() {
                         Mis solicitudes
                       </Link>
                     )}
+                    <Link
+                      to="/solicitar-viaje"
+                      className="opcion-menu-usuario"
+                      onClick={() => setMostrarMenuUsuario(false)}
+                    >
+                      Solicitar viaje nuevo
+                    </Link>
+                    <Link
+                      to="/mis-solicitudes-nuevas"
+                      className="opcion-menu-usuario"
+                      onClick={() => setMostrarMenuUsuario(false)}
+                    >
+                      Mis viajes solicitados
+                    </Link>
 
                     <Link
                       to="/mi-cuenta"
@@ -706,6 +722,36 @@ function Aplicacion() {
                     usuario={usuario}
                     API_URL={API_URL}
                   />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/solicitar-viaje"
+            element={
+              usuario ? (
+                usuario.rol?.toLowerCase() === "pasajero" ? (
+                  <SolicitarViajeNuevo usuario={usuario} API_URL={API_URL} />
+                ) : (
+                  <Navigate to="/mis-rutas" replace />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/mis-solicitudes-nuevas"
+            element={
+              usuario ? (
+                usuario.rol?.toLowerCase() === "pasajero" ? (
+                  <MisSolicitudesNuevas usuario={usuario} API_URL={API_URL} />
+                ) : (
+                  <Navigate to="/mis-rutas" replace />
                 )
               ) : (
                 <Navigate to="/" replace />

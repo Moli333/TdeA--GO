@@ -1206,6 +1206,238 @@ app.get(
   }
 );
 
+
+// ------------------------------------------------------------------
+// 13. CREAR SOLICITUD DE VIAJE NUEVO
+// POST /api/solicitudes-viajes-nuevos
+// ------------------------------------------------------------------
+
+app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
+  try {
+    const {
+      pasajero_id,
+      origen,
+      destino,
+      lat_origen,
+      lng_origen,
+      lat_destino,
+      lng_destino,
+      fecha_hora_salida,
+    } = req.body;
+
+    const coordenadas = [
+      lat_origen,
+      lng_origen,
+      lat_destino,
+      lng_destino,
+    ];
+
+    if (
+      !pasajero_id ||
+      !String(origen || "").trim() ||
+      !String(destino || "").trim() ||
+      !fecha_hora_salida ||
+      coordenadas.some(
+        (valor) =>
+          valor === null ||
+          valor === undefined ||
+          valor === "" ||
+          !Number.isFinite(Number(valor))
+      )
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "Completa el origen, destino, ubicación de ambos puntos, fecha y hora de salida.",
+      });
+    }
+
+    const fechaSalida = new Date(fecha_hora_salida);
+
+    if (Number.isNaN(fechaSalida.getTime())) {
+      return res.status(400).json({
+        mensaje: "La fecha y hora de salida no son válidas.",
+      });
+    }
+
+    const { data: pasajero, error: errorPasajero } =
+      await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", pasajero_id)
+        .maybeSingle();
+
+    if (errorPasajero) {
+      throw errorPasajero;
+    }
+
+    if (!pasajero) {
+      return res.status(404).json({
+        mensaje: "No se encontró el perfil del pasajero.",
+      });
+    }
+
+    if (pasajero.rol !== "pasajero") {
+      return res.status(403).json({
+        mensaje:
+          "Solo los usuarios con rol de pasajero pueden registrar solicitudes de viaje nuevo.",
+      });
+    }
+
+    const { data, error } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .insert({
+        id: crypto.randomUUID(),
+        pasajero_id,
+        origen: String(origen).trim(),
+        destino: String(destino).trim(),
+        lat_origen: Number(lat_origen),
+        lng_origen: Number(lng_origen),
+        lat_destino: Number(lat_destino),
+        lng_destino: Number(lng_destino),
+        fecha_hora_salida,
+        estado: "pendiente",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(201).json({
+      mensaje: "Solicitud de viaje nuevo registrada correctamente.",
+      solicitud: data,
+    });
+  } catch (error) {
+    console.error(
+      "Error registrando solicitud de viaje nuevo:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: "No fue posible registrar la solicitud de viaje.",
+      detalle: error.message,
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// 14. CONSULTAR SOLICITUDES PENDIENTES (CONDUCTORES)
+// GET /api/solicitudes-viajes-nuevos
+// ------------------------------------------------------------------
+
+app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
+  try {
+    const conductorId = req.query.conductor_id;
+
+    if (!conductorId) {
+      return res.status(400).json({
+        mensaje: "Debes indicar el ID del conductor.",
+      });
+    }
+
+    const { data: conductor, error: errorConductor } =
+      await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", conductorId)
+        .maybeSingle();
+
+    if (errorConductor) {
+      throw errorConductor;
+    }
+
+    if (!conductor || conductor.rol !== "conductor") {
+      return res.status(403).json({
+        mensaje:
+          "Solo los usuarios con rol de conductor pueden consultar estas solicitudes.",
+      });
+    }
+
+    const { data, error } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .select(`
+        id,
+        pasajero_id,
+        origen,
+        destino,
+        lat_origen,
+        lng_origen,
+        lat_destino,
+        lng_destino,
+        fecha_hora_salida,
+        estado,
+        creado_en,
+        pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
+          id,
+          nombre_completo,
+          telefono,
+          foto_url
+        )
+      `)
+      .eq("estado", "pendiente")
+      .order("creado_en", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json(data || []);
+  } catch (error) {
+    console.error(
+      "Error consultando solicitudes de viaje nuevo:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: "No fue posible consultar las solicitudes pendientes.",
+      detalle: error.message,
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// 15. CONSULTAR SOLICITUDES DE VIAJE NUEVO DE UN PASAJERO
+// GET /api/solicitudes-viajes-nuevos/pasajero/:id
+// ------------------------------------------------------------------
+
+app.get(
+  "/api/solicitudes-viajes-nuevos/pasajero/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id || id === "undefined" || id === "null") {
+        return res.status(400).json({
+          mensaje: "El ID del pasajero no es válido.",
+        });
+      }
+
+      const { data, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .select("*")
+        .eq("pasajero_id", id)
+        .order("creado_en", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return res.status(200).json(data || []);
+    } catch (error) {
+      console.error(
+        "Error consultando solicitudes nuevas del pasajero:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar tus solicitudes de viaje.",
+        detalle: error.message,
+      });
+    }
+  }
+);
+
 // ------------------------------------------------------------------
 // MANEJO DE ERRORES DE MULTER
 // ------------------------------------------------------------------

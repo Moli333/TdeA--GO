@@ -1162,6 +1162,322 @@ app.post("/api/solicitudes", async (req, res) => {
   }
 });
 
+// PASAJERO: registrar solicitud
+app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
+  try {
+    const {
+      pasajero_id,
+      origen,
+      destino,
+      lat_origen,
+      lng_origen,
+      lat_destino,
+      lng_destino,
+      fecha_hora_salida,
+    } = req.body;
+
+    if (
+      !pasajero_id ||
+      !origen ||
+      !destino ||
+      lat_origen == null ||
+      lng_origen == null ||
+      lat_destino == null ||
+      lng_destino == null ||
+      !fecha_hora_salida
+    ) {
+      return res.status(400).json({
+        mensaje: "Completa todos los datos del viaje.",
+      });
+    }
+
+    const { data: pasajero, error: errorPasajero } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", pasajero_id)
+        .maybeSingle();
+
+    if (errorPasajero) throw errorPasajero;
+
+    if (!pasajero || pasajero.rol !== "pasajero") {
+      return res.status(403).json({
+        mensaje: "Solo los pasajeros pueden registrar solicitudes.",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("solicitudes_viajes_nuevos")
+      .insert({
+        id: crypto.randomUUID(),
+        pasajero_id,
+        origen: String(origen).trim(),
+        destino: String(destino).trim(),
+        lat_origen: Number(lat_origen),
+        lng_origen: Number(lng_origen),
+        lat_destino: Number(lat_destino),
+        lng_destino: Number(lng_destino),
+        fecha_hora_salida,
+        estado: "pendiente",
+        conductor_id: null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({
+      mensaje: "Solicitud registrada correctamente.",
+      solicitud: data,
+    });
+  } catch (error) {
+    console.error("Error registrando viaje nuevo:", error);
+
+    return res.status(500).json({
+      mensaje: "No fue posible registrar la solicitud.",
+      detalle: error.message,
+    });
+  }
+});
+
+
+// CONDUCTOR: consultar solicitudes pendientes no rechazadas por él
+app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
+  try {
+    const { conductor_id } = req.query;
+
+    if (!conductor_id) {
+      return res.status(400).json({
+        mensaje: "No se recibió el identificador del conductor.",
+      });
+    }
+
+    const { data: perfil, error: errorPerfil } = await dbClient
+      .from("profiles")
+      .select("id, rol")
+      .eq("id", conductor_id)
+      .maybeSingle();
+
+    if (errorPerfil) throw errorPerfil;
+
+    if (!perfil || perfil.rol !== "conductor") {
+      return res.status(403).json({
+        mensaje: "Esta opción está disponible para conductores.",
+      });
+    }
+
+    const { data: solicitudes, error } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .select(`
+        *,
+        pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
+          id,
+          nombre_completo,
+          telefono,
+          foto_url
+        )
+      `)
+      .eq("estado", "pendiente")
+      .is("conductor_id", null)
+      .order("creado_en", { ascending: false });
+
+    if (error) throw error;
+
+    const { data: rechazos, error: errorRechazos } = await dbClient
+      .from("solicitudes_viajes_rechazos")
+      .select("solicitud_id")
+      .eq("conductor_id", conductor_id);
+
+    if (errorRechazos) throw errorRechazos;
+
+    const rechazadas = new Set(
+      (rechazos || []).map((item) => item.solicitud_id)
+    );
+
+    return res.json(
+      (solicitudes || []).filter(
+        (solicitud) => !rechazadas.has(solicitud.id)
+      )
+    );
+  } catch (error) {
+    console.error("Error consultando solicitudes nuevas:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible consultar las solicitudes.",
+    });
+  }
+});
+
+
+// CONDUCTOR: aceptar solicitud
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/aceptar",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { conductor_id } = req.body;
+
+      if (!conductor_id) {
+        return res.status(400).json({
+          mensaje: "No se identificó al conductor.",
+        });
+      }
+
+      const { data: perfil, error: errorPerfil } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", conductor_id)
+        .maybeSingle();
+
+      if (errorPerfil) throw errorPerfil;
+
+      if (!perfil || perfil.rol !== "conductor") {
+        return res.status(403).json({
+          mensaje: "Solo un conductor puede aceptar el viaje.",
+        });
+      }
+
+      const { data, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .update({
+          estado: "aceptada",
+          conductor_id,
+          aceptado_en: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .eq("estado", "pendiente")
+        .is("conductor_id", null)
+        .select()
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        return res.status(409).json({
+          mensaje: "Otro conductor ya aceptó esta solicitud.",
+        });
+      }
+
+      return res.json({
+        mensaje: "Solicitud aceptada correctamente.",
+        solicitud: data,
+      });
+    } catch (error) {
+      console.error("Error aceptando solicitud:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible aceptar la solicitud.",
+      });
+    }
+  }
+);
+
+
+// CONDUCTOR: rechazar solo para sí mismo
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/rechazar",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { conductor_id } = req.body;
+
+      if (!conductor_id) {
+        return res.status(400).json({
+          mensaje: "No se identificó al conductor.",
+        });
+      }
+
+      const { data: perfil, error: errorPerfil } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", conductor_id)
+        .maybeSingle();
+
+      if (errorPerfil) throw errorPerfil;
+
+      if (!perfil || perfil.rol !== "conductor") {
+        return res.status(403).json({
+          mensaje: "Solo un conductor puede rechazar la solicitud.",
+        });
+      }
+
+      const { data: solicitud, error: errorSolicitud } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .select("id, estado, conductor_id")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (errorSolicitud) throw errorSolicitud;
+
+      if (
+        !solicitud ||
+        solicitud.estado !== "pendiente" ||
+        solicitud.conductor_id
+      ) {
+        return res.status(409).json({
+          mensaje: "Esta solicitud ya no está disponible.",
+        });
+      }
+
+      const { error } = await dbClient
+        .from("solicitudes_viajes_rechazos")
+        .upsert(
+          {
+            solicitud_id: id,
+            conductor_id,
+          },
+          {
+            onConflict: "solicitud_id,conductor_id",
+            ignoreDuplicates: true,
+          }
+        );
+
+      if (error) throw error;
+
+      return res.json({
+        mensaje: "Solicitud descartada de tu lista.",
+      });
+    } catch (error) {
+      console.error("Error rechazando solicitud:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible rechazar la solicitud.",
+      });
+    }
+  }
+);
+
+
+// PASAJERO: consultar historial y conductor asignado
+app.get(
+  "/api/solicitudes-viajes-nuevos/pasajero/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { data, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .select(`
+          *,
+          conductor:profiles!solicitudes_viajes_nuevos_conductor_id_fkey (
+            id,
+            nombre_completo,
+            telefono,
+            foto_url
+          )
+        `)
+        .eq("pasajero_id", id)
+        .order("creado_en", { ascending: false });
+
+      if (error) throw error;
+
+      return res.json(data || []);
+    } catch (error) {
+      console.error("Error consultando historial de viajes:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar tus solicitudes.",
+      });
+    }
+  }
+);
+
 // ------------------------------------------------------------------
 // 12. SOLICITUDES DE UN PASAJERO
 // GET /api/solicitudes/pasajero/:id
@@ -1260,7 +1576,7 @@ app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
     }
 
     const { data: pasajero, error: errorPasajero } =
-      await dbClient
+      await supabaseAdmin
         .from("profiles")
         .select("id, rol")
         .eq("id", pasajero_id)
@@ -1325,10 +1641,10 @@ app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
 // 14. CONSULTAR SOLICITUDES PENDIENTES (CONDUCTORES)
 // GET /api/solicitudes-viajes-nuevos
 // ------------------------------------------------------------------
-
+// CONDUCTOR: consultar solicitudes pendientes no rechazadas por él
 app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
   try {
-    const conductorId = req.query.conductor_id;
+    const { conductor_id: conductorId } = req.query;
 
     if (!conductorId) {
       return res.status(400).json({
@@ -1336,25 +1652,24 @@ app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
       });
     }
 
+    // Verificar que el usuario tenga rol de conductor
     const { data: conductor, error: errorConductor } =
-      await dbClient
+      await supabaseAdmin
         .from("profiles")
         .select("id, rol")
         .eq("id", conductorId)
         .maybeSingle();
 
-    if (errorConductor) {
-      throw errorConductor;
-    }
+    if (errorConductor) throw errorConductor;
 
     if (!conductor || conductor.rol !== "conductor") {
       return res.status(403).json({
-        mensaje:
-          "Solo los usuarios con rol de conductor pueden consultar estas solicitudes.",
+        mensaje: "Solo los conductores pueden consultar estas solicitudes.",
       });
     }
 
-    const { data, error } = await dbClient
+    // Consultar solicitudes que todavía no han sido aceptadas
+    const { data: solicitudes, error } = await supabaseAdmin
       .from("solicitudes_viajes_nuevos")
       .select(`
         id,
@@ -1376,18 +1691,31 @@ app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
         )
       `)
       .eq("estado", "pendiente")
+      .is("conductor_id", null)
       .order("creado_en", { ascending: false });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    return res.status(200).json(data || []);
-  } catch (error) {
-    console.error(
-      "Error consultando solicitudes de viaje nuevo:",
-      error
+    // Consultar los rechazos realizados por este conductor
+    const { data: rechazos, error: errorRechazos } = await supabaseAdmin
+      .from("solicitudes_viajes_rechazos")
+      .select("solicitud_id")
+      .eq("conductor_id", conductorId);
+
+    if (errorRechazos) throw errorRechazos;
+
+    const solicitudesRechazadas = new Set(
+      (rechazos || []).map((rechazo) => rechazo.solicitud_id)
     );
+
+    // Excluir únicamente las solicitudes rechazadas por este conductor
+    const solicitudesDisponibles = (solicitudes || []).filter(
+      (solicitud) => !solicitudesRechazadas.has(solicitud.id)
+    );
+
+    return res.status(200).json(solicitudesDisponibles);
+  } catch (error) {
+    console.error("Error consultando solicitudes de viaje nuevo:", error);
 
     return res.status(500).json({
       mensaje: "No fue posible consultar las solicitudes pendientes.",
@@ -1395,6 +1723,7 @@ app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
     });
   }
 });
+
 
 // ------------------------------------------------------------------
 // 15. CONSULTAR SOLICITUDES DE VIAJE NUEVO DE UN PASAJERO
@@ -1415,7 +1744,15 @@ app.get(
 
       const { data, error } = await dbClient
         .from("solicitudes_viajes_nuevos")
-        .select("*")
+        .select(`
+    *,
+    conductor:profiles!solicitudes_viajes_nuevos_conductor_id_fkey (
+      id,
+      nombre_completo,
+      telefono,
+      foto_url
+    )
+  `)
         .eq("pasajero_id", id)
         .order("creado_en", { ascending: false });
 
@@ -1432,6 +1769,78 @@ app.get(
 
       return res.status(500).json({
         mensaje: "No fue posible consultar tus solicitudes de viaje.",
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// 16. RESPONDER SOLICITUD DE VIAJE NUEVO
+// PATCH /api/solicitudes-viajes-nuevos/:id/responder
+// ------------------------------------------------------------------
+
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/responder",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { conductor_id, accion } = req.body;
+
+      if (!id || !conductor_id || !["aceptar", "rechazar"].includes(accion)) {
+        return res.status(400).json({
+          mensaje: "Los datos para responder la solicitud no son válidos.",
+        });
+      }
+
+      const { data: conductor, error: errorConductor } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", conductor_id)
+        .maybeSingle();
+
+      if (errorConductor) throw errorConductor;
+
+      if (!conductor || conductor.rol !== "conductor") {
+        return res.status(403).json({
+          mensaje: "Solo un conductor puede responder esta solicitud.",
+        });
+      }
+
+      const actualizacion = {
+        estado: accion === "aceptar" ? "aceptada" : "rechazada",
+        conductor_id: accion === "aceptar" ? conductor_id : null,
+        aceptado_en: accion === "aceptar" ? new Date().toISOString() : null,
+      };
+
+      const { data, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .update(actualizacion)
+        .eq("id", id)
+        .eq("estado", "pendiente")
+        .select()
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        return res.status(409).json({
+          mensaje: "Esta solicitud ya fue atendida por otro conductor.",
+        });
+      }
+
+      return res.status(200).json({
+        mensaje:
+          accion === "aceptar"
+            ? "Has aceptado la solicitud de viaje."
+            : "Has rechazado la solicitud de viaje.",
+        solicitud: data,
+      });
+    } catch (error) {
+      console.error("Error respondiendo solicitud de viaje:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible responder la solicitud.",
         detalle: error.message,
       });
     }

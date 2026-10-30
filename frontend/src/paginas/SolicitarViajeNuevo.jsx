@@ -123,8 +123,9 @@ export default function SolicitarViajeNuevo({
       });
       const datos = await respuesta.json().catch(() => ({}));
       if (!respuesta.ok) throw new Error(datos.mensaje || datos.error || "No fue posible registrar la solicitud.");
-      setMensaje("Tu solicitud de viaje fue registrada y ya puede ser consultada por los conductores.");
-      setOrigen("");
+      setMensaje(
+        "Tu solicitud fue publicada. Puedes consultar su estado en Mis solicitudes; te mostraremos cuando un conductor la acepte."
+      ); setOrigen("");
       setDestino("");
       setCoordOrigen(null);
       setCoordDestino(null);

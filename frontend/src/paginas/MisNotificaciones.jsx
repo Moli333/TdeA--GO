@@ -1,0 +1,123 @@
+import { useEffect, useState } from "react";
+
+export default function MisNotificaciones({ usuario, API_URL }) {
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargarNotificaciones = async () => {
+    try {
+      setCargando(true);
+      const idUsuario = usuario?.id || usuario?.id_usuario;
+      if (!idUsuario) return;
+
+      const respuesta = await fetch(`${API_URL}/api/notificaciones/${idUsuario}`);
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) throw new Error(datos.mensaje || "Error al cargar.");
+
+      setNotificaciones(Array.isArray(datos) ? datos : []);
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarNotificaciones();
+  }, [usuario]);
+
+  const marcarComoLeida = async (id) => {
+    try {
+      const respuesta = await fetch(`${API_URL}/api/notificaciones/${id}/leida`, {
+        method: "PATCH",
+      });
+
+      if (respuesta.ok) {
+        setNotificaciones((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, leida: true } : n))
+        );
+      }
+    } catch (error) {
+      console.error("Error al marcar como leída:", error);
+    }
+  };
+
+  return (
+    <div className="contenedor" style={{ padding: "32px 16px", maxWidth: "800px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        <h1>Mis Notificaciones</h1>
+        <p style={{ color: "#687782" }}>Revisa las solicitudes y avisos recientes de tus rutas.</p>
+      </div>
+
+      {cargando ? (
+        <p>Cargando notificaciones...</p>
+      ) : notificaciones.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px", background: "#f8f9fa", borderRadius: "12px" }}>
+          <p>No tienes notificaciones por ahora.</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {notificaciones.map((notif) => (
+            <div
+              key={notif.id}
+              style={{
+                padding: "16px",
+                borderRadius: "12px",
+                background: notif.leida ? "#ffffff" : "#f0f7ff",
+                border: "1px solid #dfe7ec",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "16px",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <strong>{notif.titulo}</strong>
+                  {!notif.leida && (
+                    <span
+                      style={{
+                        background: "#0b5f91",
+                        color: "#fff",
+                        fontSize: "10px",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      Nueva
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: "4px 0", color: "#333", fontSize: "14px" }}>{notif.mensaje}</p>
+                <small style={{ color: "#888", fontSize: "12px" }}>
+                  {new Date(notif.fecha_creacion).toLocaleString()}
+                </small>
+              </div>
+
+              {!notif.leida && (
+                <button
+                  type="button"
+                  onClick={() => marcarComoLeida(notif.id)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #0b5f91",
+                    color: "#0b5f91",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Marcar leída
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

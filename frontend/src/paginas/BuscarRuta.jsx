@@ -9,6 +9,7 @@ function BuscarRutas({
   rutasIniciales = [],
   API_URL = "http://localhost:5000",
   onSolicitarCupo,
+  usuario,
 }) {
   const [rutas, setRutas] = useState(rutasIniciales);
   const [origen, setOrigen] = useState("");
@@ -16,6 +17,7 @@ function BuscarRutas({
   const [fecha, setFecha] = useState("");
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState("");
+  const [solicitandoId, setSolicitandoId] = useState(null);
 
   const mapaContenedor = useRef(null);
   const mapa = useRef(null);
@@ -53,6 +55,69 @@ function BuscarRutas({
 
     cargarRutas();
   }, [API_URL]);
+
+  // ---------------------------------------------------------
+  // MANEJAR SOLICITUD DE CUPO
+  // ---------------------------------------------------------
+
+  const manejarSolicitud = async (ruta) => {
+    // Si el padre ya provee un handler personalizado, lo usamos
+    if (onSolicitarCupo) {
+      onSolicitarCupo(ruta);
+      return;
+    }
+
+    const idPasajero = usuario?.id || usuario?.id_usuario;
+
+    if (!idPasajero) {
+      alert("Debes iniciar sesión como pasajero para solicitar un cupo.");
+      return;
+    }
+
+    try {
+      setSolicitandoId(ruta.id);
+
+      const respuesta = await fetch(`${API_URL}/api/solicitudes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ruta_id: ruta.id,
+          pasajero_id: idPasajero,
+        }),
+      });
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(datos.mensaje || "No fue posible solicitar el cupo.");
+      }
+
+      alert(datos.mensaje || "¡Cupo solicitado y plaza reservada correctamente!");
+
+      // Descontar cupo localmente en la lista de rutas
+      setRutas((rutasAnteriores) =>
+        rutasAnteriores.map((item) => {
+          if (item.id === ruta.id) {
+            const cuposActuales = Number(
+              item.cupos_disponibles ?? item.cuposDisponibles ?? item.cupos ?? 0
+            );
+            return {
+              ...item,
+              cupos_disponibles: Math.max(0, cuposActuales - 1),
+            };
+          }
+          return item;
+        })
+      );
+    } catch (error) {
+      console.error("Error al solicitar cupo:", error);
+      alert(error.message || "Ocurrió un error al procesar tu solicitud.");
+    } finally {
+      setSolicitandoId(null);
+    }
+  };
 
   // ---------------------------------------------------------
   // FILTRAR RUTAS
@@ -437,6 +502,8 @@ function BuscarRutas({
                   0
               );
 
+              const estaSolicitando = solicitandoId === ruta.id;
+
               return (
                 <article
                   className="tarjeta-ruta"
@@ -485,17 +552,21 @@ function BuscarRutas({
                     </div>
                   </div>
 
-                  {ruta.conductor_nombre && (
+                  {(ruta.conductor?.nombre_completo || ruta.conductor_nombre) && (
                     <div className="ruta-conductor">
                       <div className="conductor-avatar">
-                        {String(ruta.conductor_nombre)
+                        {String(
+                          ruta.conductor?.nombre_completo || ruta.conductor_nombre
+                        )
                           .charAt(0)
                           .toUpperCase()}
                       </div>
 
                       <div>
                         <span>Conductor</span>
-                        <strong>{ruta.conductor_nombre}</strong>
+                        <strong>
+                          {ruta.conductor?.nombre_completo || ruta.conductor_nombre}
+                        </strong>
                       </div>
                     </div>
                   )}
@@ -504,14 +575,12 @@ function BuscarRutas({
                     <button
                       type="button"
                       className="boton-solicitar"
-                      disabled={cuposDisponibles <= 0}
-                      onClick={() =>
-                        onSolicitarCupo
-                          ? onSolicitarCupo(ruta)
-                          : undefined
-                      }
+                      disabled={cuposDisponibles <= 0 || estaSolicitando}
+                      onClick={() => manejarSolicitud(ruta)}
                     >
-                      {cuposDisponibles > 0
+                      {estaSolicitando
+                        ? "Procesando..."
+                        : cuposDisponibles > 0
                         ? "Solicitar cupo"
                         : "Sin cupos disponibles"}
                     </button>

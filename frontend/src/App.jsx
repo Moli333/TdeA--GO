@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import RegistrarVehiculo from "./paginas/RegistrarVehiculo";
 import SolicitarViajeNuevo from "./paginas/SolicitarViajeNuevo";
 import MisSolicitudesNuevas from "./paginas/MisSolicitudesNuevas";
+import MisNotificaciones from "./paginas/MisNotificaciones";
 
 import {
   BrowserRouter,
@@ -584,6 +585,15 @@ function Aplicacion() {
                       Mi cuenta
                     </Link>
 
+
+                    <Link
+                      to="/notificaciones"
+                      className="opcion-menu-usuario"
+                      onClick={() => setMostrarMenuUsuario(false)}
+                    >
+                      Notificaciones
+                    </Link>
+
                     <div className="separador-menu" />
 
                     {esPasajero && (
@@ -664,6 +674,19 @@ function Aplicacion() {
             }
           />
 
+
+          <Route
+            path="/notificaciones"
+            element={
+              usuario ? (
+                <MisNotificaciones usuario={usuario} API_URL={API_URL} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          
           <Route
             path="/buscar"
             element={

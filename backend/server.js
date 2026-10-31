@@ -1065,10 +1065,10 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
   }
 });
 // ------------------------------------------------------------------
-// 11. SOLICITAR CUPO
-// POST /api/solicitudes
+// 11. SOLICITUDES DE CUPOS Y VIAJES NUEVOS
 // ------------------------------------------------------------------
 
+// PASAJERO: solicitar cupo en ruta publicada (Descuenta plaza y avisa al conductor)
 app.post("/api/solicitudes", async (req, res) => {
   try {
     const {
@@ -1086,52 +1086,65 @@ app.post("/api/solicitudes", async (req, res) => {
       });
     }
 
-    const ruta = await dbClient
+    // 1. Consultar la ruta (incluyendo conductor, origen y destino para la notificación)
+    const { data: ruta, error: errorRuta } = await dbClient
       .from("rutas")
-      .select("id, cupos_disponibles, estado")
+      .select("id, conductor_id, origen, destino, cupos_disponibles, estado")
       .eq("id", idViaje)
       .maybeSingle();
 
-    if (ruta.error) {
-      throw ruta.error;
+    if (errorRuta) {
+      throw errorRuta;
     }
 
-    if (!ruta.data) {
+    if (!ruta) {
       return res.status(404).json({
         mensaje: "La ruta no existe.",
       });
     }
 
-    if (ruta.data.estado !== "programado") {
+    if (ruta.estado !== "programado") {
       return res.status(400).json({
         mensaje: "Esta ruta ya no está disponible.",
       });
     }
 
-    if (Number(ruta.data.cupos_disponibles) <= 0) {
+    const cuposActuales = Number(ruta.cupos_disponibles);
+    if (cuposActuales <= 0) {
       return res.status(400).json({
         mensaje: "No hay cupos disponibles en esta ruta.",
       });
     }
 
-    const existente = await dbClient
+    // 2. Verificar si ya existe una solicitud previa
+    const { data: existente, error: errorExistente } = await dbClient
       .from("solicitudes_viaje")
       .select("id, estado")
       .eq("viaje_id", idViaje)
       .eq("pasajero_id", pasajero_id)
       .maybeSingle();
 
-    if (existente.error) {
-      throw existente.error;
+    if (errorExistente) {
+      throw errorExistente;
     }
 
-    if (existente.data) {
+    if (existente) {
       return res.status(409).json({
         mensaje:
           "Ya tienes una solicitud para esta ruta.",
       });
     }
 
+    // 3. Obtener el nombre del pasajero para la notificación
+    const { data: pasajeroInfo } = await dbClient
+      .from("profiles")
+      .select("nombre_completo")
+      .eq("id", pasajero_id)
+      .maybeSingle();
+
+    const nombrePasajero = pasajeroInfo?.nombre_completo || "Un pasajero";
+
+    // 4. Crear la solicitud de viaje
     const { data, error } = await dbClient
       .from("solicitudes_viaje")
       .insert({
@@ -1149,8 +1162,36 @@ app.post("/api/solicitudes", async (req, res) => {
       throw error;
     }
 
+    // 5. Descontar 1 cupo disponible de la ruta publicada
+    const { error: errorUpdate } = await dbClient
+      .from("rutas")
+      .update({ cupos_disponibles: cuposActuales - 1 })
+      .eq("id", idViaje);
+
+    if (errorUpdate) {
+      console.error("Error al descontar cupo de la ruta:", errorUpdate);
+    }
+
+    // 6. CREAR NOTIFICACIÓN AUTOMÁTICA PARA EL CONDUCTOR
+    if (ruta.conductor_id) {
+      const { error: errorNotif } = await dbClient
+        .from("notificaciones")
+        .insert({
+          id: crypto.randomUUID(),
+          usuario_id: ruta.conductor_id,
+          titulo: "¡Nueva solicitud de cupo!",
+          mensaje: `${nombrePasajero} ha solicitado un cupo en tu ruta de ${ruta.origen} a ${ruta.destino}.`,
+          leida: false,
+          fecha_creacion: new Date().toISOString(),
+        });
+
+      if (errorNotif) {
+        console.error("Error al crear notificación para el conductor:", errorNotif);
+      }
+    }
+
     res.status(201).json({
-      mensaje: "Solicitud de cupo enviada correctamente.",
+      mensaje: "¡Solicitud de cupo enviada y plaza reservada correctamente!",
       solicitud: data,
     });
   } catch (error) {
@@ -1158,11 +1199,13 @@ app.post("/api/solicitudes", async (req, res) => {
 
     res.status(500).json({
       mensaje: "No fue posible enviar la solicitud.",
+      detalle: error.message,
     });
   }
 });
 
-// PASAJERO: registrar solicitud
+
+// PASAJERO: registrar solicitud de viaje nuevo personalizado
 app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
   try {
     const {
@@ -1477,6 +1520,56 @@ app.get(
     }
   }
 );
+
+// ------------------------------------------------------------------
+// NOTIFICACIONES
+// ------------------------------------------------------------------
+
+// Consultar notificaciones de un usuario
+app.get("/api/notificaciones/:usuario_id", async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+
+    if (!usuario_id) {
+      return res.status(400).json({ mensaje: "Falta el ID de usuario." });
+    }
+
+    const { data, error } = await dbClient
+      .from("notificaciones")
+      .select("*")
+      .eq("usuario_id", usuario_id)
+      .order("fecha_creacion", { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (error) {
+    console.error("Error obteniendo notificaciones:", error);
+    res.status(500).json({ mensaje: "No fue posible consultar las notificaciones." });
+  }
+});
+
+// Marcar notificación como leída
+app.patch("/api/notificaciones/:id/leida", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await dbClient
+      .from("notificaciones")
+      .update({ leida: true })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ mensaje: "Notificación marcada como leída.", notificacion: data });
+  } catch (error) {
+    console.error("Error actualizando notificación:", error);
+    res.status(500).json({ mensaje: "No fue posible actualizar la notificación." });
+  }
+});
+
 
 // ------------------------------------------------------------------
 // 12. SOLICITUDES DE UN PASAJERO
@@ -1879,7 +1972,7 @@ app.use((error, req, res, next) => {
 
 
 // ------------------------------------------------------------------
-// 13. REGISTRAR O ACTUALIZAR VEHÍCULO
+// 17. REGISTRAR O ACTUALIZAR VEHÍCULO
 // POST /api/vehiculos
 // ------------------------------------------------------------------
 
@@ -1987,7 +2080,7 @@ app.get("/api/vehiculos/:usuarioId", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 14. INICIO DEL SERVIDOR
+// 18. INICIO DEL SERVIDOR
 // ------------------------------------------------------------------
 
 app.listen(PORT, () => {

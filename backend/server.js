@@ -1080,23 +1080,25 @@ app.post("/api/solicitudes", async (req, res) => {
 
     const idViaje = viaje_id || ruta_id;
 
+    console.log("➡️ Recibida solicitud para viaje/ruta:", idViaje, "de pasajero:", pasajero_id);
+
     if (!idViaje || !pasajero_id) {
       return res.status(400).json({
         mensaje: "Faltan datos para solicitar el cupo.",
       });
     }
 
-    // 1. Consultar la ruta (incluyendo conductor, origen y destino para la notificación)
+    // 1. Consultar la ruta
     const { data: ruta, error: errorRuta } = await dbClient
       .from("rutas")
       .select("id, conductor_id, origen, destino, cupos_disponibles, estado")
       .eq("id", idViaje)
       .maybeSingle();
 
-    if (errorRuta) {
-      throw errorRuta;
-    }
+    if (errorRuta) throw errorRuta;
 
+    console.log("📍 Ruta encontrada en la BD:", ruta); // <--- ESTE LOG NOS DIRÁ QUÉ TRAJO
+    
     if (!ruta) {
       return res.status(404).json({
         mensaje: "La ruta no existe.",
@@ -1124,14 +1126,11 @@ app.post("/api/solicitudes", async (req, res) => {
       .eq("pasajero_id", pasajero_id)
       .maybeSingle();
 
-    if (errorExistente) {
-      throw errorExistente;
-    }
+    if (errorExistente) throw errorExistente;
 
     if (existente) {
       return res.status(409).json({
-        mensaje:
-          "Ya tienes una solicitud para esta ruta.",
+        mensaje: "Ya tienes una solicitud para esta ruta.",
       });
     }
 
@@ -1158,9 +1157,7 @@ app.post("/api/solicitudes", async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     // 5. Descontar 1 cupo disponible de la ruta publicada
     const { error: errorUpdate } = await dbClient
@@ -1196,7 +1193,6 @@ app.post("/api/solicitudes", async (req, res) => {
     });
   } catch (error) {
     console.error("Error solicitando cupo:", error);
-
     res.status(500).json({
       mensaje: "No fue posible enviar la solicitud.",
       detalle: error.message,
@@ -1275,7 +1271,6 @@ app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
     });
   } catch (error) {
     console.error("Error registrando viaje nuevo:", error);
-
     return res.status(500).json({
       mensaje: "No fue posible registrar la solicitud.",
       detalle: error.message,
@@ -1284,74 +1279,7 @@ app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
 });
 
 
-// CONDUCTOR: consultar solicitudes pendientes no rechazadas por él
-app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
-  try {
-    const { conductor_id } = req.query;
-
-    if (!conductor_id) {
-      return res.status(400).json({
-        mensaje: "No se recibió el identificador del conductor.",
-      });
-    }
-
-    const { data: perfil, error: errorPerfil } = await dbClient
-      .from("profiles")
-      .select("id, rol")
-      .eq("id", conductor_id)
-      .maybeSingle();
-
-    if (errorPerfil) throw errorPerfil;
-
-    if (!perfil || perfil.rol !== "conductor") {
-      return res.status(403).json({
-        mensaje: "Esta opción está disponible para conductores.",
-      });
-    }
-
-    const { data: solicitudes, error } = await dbClient
-      .from("solicitudes_viajes_nuevos")
-      .select(`
-        *,
-        pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
-          id,
-          nombre_completo,
-          telefono,
-          foto_url
-        )
-      `)
-      .eq("estado", "pendiente")
-      .is("conductor_id", null)
-      .order("creado_en", { ascending: false });
-
-    if (error) throw error;
-
-    const { data: rechazos, error: errorRechazos } = await dbClient
-      .from("solicitudes_viajes_rechazos")
-      .select("solicitud_id")
-      .eq("conductor_id", conductor_id);
-
-    if (errorRechazos) throw errorRechazos;
-
-    const rechazadas = new Set(
-      (rechazos || []).map((item) => item.solicitud_id)
-    );
-
-    return res.json(
-      (solicitudes || []).filter(
-        (solicitud) => !rechazadas.has(solicitud.id)
-      )
-    );
-  } catch (error) {
-    console.error("Error consultando solicitudes nuevas:", error);
-    return res.status(500).json({
-      mensaje: "No fue posible consultar las solicitudes.",
-    });
-  }
-});
-
-
-// CONDUCTOR: aceptar solicitud
+// CONDUCTOR: aceptar solicitud de viaje nuevo
 app.patch(
   "/api/solicitudes-viajes-nuevos/:id/aceptar",
   async (req, res) => {
@@ -1414,7 +1342,7 @@ app.patch(
 );
 
 
-// CONDUCTOR: rechazar solo para sí mismo
+// CONDUCTOR: rechazar viaje nuevo solo para sí mismo
 app.patch(
   "/api/solicitudes-viajes-nuevos/:id/rechazar",
   async (req, res) => {
@@ -1488,38 +1416,52 @@ app.patch(
 );
 
 
-// PASAJERO: consultar historial y conductor asignado
-app.get(
-  "/api/solicitudes-viajes-nuevos/pasajero/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
+// CONDUCTOR: Consultar solicitudes de cupos para rutas publicadas
+app.get("/api/solicitudes/conductor/:conductor_id", async (req, res) => {
+  try {
+    const { conductor_id } = req.params;
 
-      const { data, error } = await dbClient
-        .from("solicitudes_viajes_nuevos")
-        .select(`
-          *,
-          conductor:profiles!solicitudes_viajes_nuevos_conductor_id_fkey (
-            id,
-            nombre_completo,
-            telefono,
-            foto_url
-          )
-        `)
-        .eq("pasajero_id", id)
-        .order("creado_en", { ascending: false });
+    const { data: misRutas, error: errorRutas } = await dbClient
+      .from("rutas")
+      .select("id")
+      .eq("conductor_id", conductor_id);
 
-      if (error) throw error;
+    if (errorRutas) throw errorRutas;
 
-      return res.json(data || []);
-    } catch (error) {
-      console.error("Error consultando historial de viajes:", error);
-      return res.status(500).json({
-        mensaje: "No fue posible consultar tus solicitudes.",
-      });
+    const rutaIds = (misRutas || []).map((r) => r.id);
+
+    if (rutaIds.length === 0) {
+      return res.json([]);
     }
+
+    const { data: solicitudes, error: errorSolicitudes } = await dbClient
+      .from("solicitudes_viaje")
+      .select(`
+        *,
+        pasajero:profiles!solicitudes_viaje_pasajero_id_fkey (
+          id,
+          nombre_completo,
+          telefono,
+          foto_url
+        ),
+        ruta:rutas!solicitudes_viaje_viaje_id_fkey (
+          origen,
+          destino,
+          fecha,
+          hora
+        )
+      `)
+      .in("viaje_id", rutaIds)
+      .order("fecha_solicitud", { ascending: false });
+
+    if (errorSolicitudes) throw errorSolicitudes;
+
+    return res.json(solicitudes || []);
+  } catch (error) {
+    console.error("Error al obtener solicitudes del conductor:", error);
+    return res.status(500).json({ mensaje: "Error al obtener solicitudes." });
   }
-);
+});
 
 // ------------------------------------------------------------------
 // NOTIFICACIONES

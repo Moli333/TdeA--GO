@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./Administrador.css";
 
 function Administrador({ usuario, API_URL, onCerrarSesion, onInicio }) {
   const [seccion, setSeccion] = useState("resumen");

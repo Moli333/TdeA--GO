@@ -179,6 +179,18 @@ function Aplicacion() {
     navegar,
   ]);
 
+  {
+    esAdministrador && (
+      <Link
+        to="/admin"
+        className="opcion-menu-usuario"
+        onClick={() => setMostrarMenuUsuario(false)}
+      >
+        Panel de administración
+      </Link>
+    )
+  }
+
   const actualizarUsuario = (datosActualizados) => {
     if (!datosActualizados) {
       return;
@@ -535,6 +547,16 @@ function Aplicacion() {
                             : "Pasajero"}
                       </span>
                     </div>
+
+                    {esAdministrador && (
+                      <Link
+                        to="/admin"
+                        className="opcion-menu-usuario"
+                        onClick={() => setMostrarMenuUsuario(false)}
+                      >
+                        Panel administrativo
+                      </Link>
+                    )}
 
                     <Link
                       to="/buscar"

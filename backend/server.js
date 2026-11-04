@@ -537,6 +537,74 @@ app.get(
 );
 
 // ------------------------------------------------------------------
+// CONSULTAS GENERALES DEL PANEL DE ADMINISTRACIÓN
+// ------------------------------------------------------------------
+
+// Consultar todas las rutas
+app.get(
+  "/api/admin/rutas",
+  verificarAutenticacion,
+  verificarAdministrador,
+  async (req, res) => {
+    try {
+      const { data, error } = await dbClient
+        .from("rutas")
+        .select("*")
+        .order("fecha_hora_salida", { ascending: false });
+
+      if (error) throw error;
+
+      return res.json(data || []);
+    } catch (error) {
+      console.error("Error consultando rutas administrativas:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar las rutas.",
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// Consultar solicitudes de cupos y solicitudes de viajes nuevos
+app.get(
+  "/api/admin/solicitudes",
+  verificarAutenticacion,
+  verificarAdministrador,
+  async (req, res) => {
+    try {
+      const { data: solicitudesCupos, error: errorCupos } =
+        await dbClient
+          .from("solicitudes_viaje")
+          .select("*")
+          .order("fecha_solicitud", { ascending: false });
+
+      if (errorCupos) throw errorCupos;
+
+      const { data: solicitudesNuevas, error: errorNuevas } =
+        await dbClient
+          .from("solicitudes_viajes_nuevos")
+          .select("*")
+          .order("creado_en", { ascending: false });
+
+      if (errorNuevas) throw errorNuevas;
+
+      return res.json({
+        solicitudesCupos: solicitudesCupos || [],
+        solicitudesNuevas: solicitudesNuevas || [],
+      });
+    } catch (error) {
+      console.error("Error consultando solicitudes administrativas:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar las solicitudes.",
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
 // 5. CAMBIAR ROL
 // PUT /api/usuarios/:id/rol
 // ------------------------------------------------------------------

@@ -467,7 +467,10 @@ function MiCuenta({
 
   if (!usuario) {
     return (
-      <section className="mi-cuenta-pagina">
+      <section
+        className={`mi-cuenta-pagina ${esAdministrador ? "mi-cuenta-administrador" : ""
+          }`}
+      >
         <div className="mi-cuenta-contenedor mi-cuenta-vacio">
           <h2>No hay una sesión activa</h2>
           <p>Inicia sesión para consultar tu cuenta.</p>
@@ -590,8 +593,8 @@ function MiCuenta({
             {mensajeFoto && (
               <p
                 className={`mensaje-foto ${tipoMensajeFoto === "error"
-                    ? "mensaje-foto-error"
-                    : "mensaje-foto-exito"
+                  ? "mensaje-foto-error"
+                  : "mensaje-foto-exito"
                   }`}
               >
                 {mensajeFoto}

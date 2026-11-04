@@ -1,4 +1,3 @@
-
 import "./MiCuenta.css";
 import { useEffect, useRef, useState } from "react";
 import RegistrarVehiculo from "./RegistrarVehiculo";
@@ -36,6 +35,13 @@ function MiCuenta({
 
   const rolActual = usuario?.rol?.toLowerCase() || "pasajero";
   const esConductor = rolActual === "conductor";
+  const esAdministrador = rolActual === "administrador";
+
+  const nombreRol = esAdministrador
+    ? "Administradora"
+    : esConductor
+      ? "Conductor"
+      : "Pasajero";
 
   const [telefono, setTelefono] = useState(usuario?.telefono || "");
   const [guardandoTelefono, setGuardandoTelefono] = useState(false);
@@ -390,13 +396,11 @@ function MiCuenta({
     }
   }
 
-
   async function manejarVehiculoRegistrado(vehiculoRegistrado) {
     try {
       setMensajeFoto("");
       setTipoMensajeFoto("");
 
-      // 1. Consultar nuevamente el vehículo guardado en la base de datos.
       const respuestaVehiculo = await fetch(
         `${API_URL}/api/vehiculos/${encodeURIComponent(idUsuario)}`
       );
@@ -419,7 +423,6 @@ function MiCuenta({
         );
       }
 
-      // 2. Activar el rol de conductor.
       const respuestaRol = await fetch(
         `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
         {
@@ -442,7 +445,6 @@ function MiCuenta({
         );
       }
 
-      // 3. Guardar el perfil y los datos del vehículo en el estado del usuario.
       actualizarUsuario?.({
         ...(datosRol.usuario || usuario),
         rol: "conductor",
@@ -462,7 +464,6 @@ function MiCuenta({
       setTipoMensajeFoto("error");
     }
   }
-
 
   if (!usuario) {
     return (
@@ -534,9 +535,7 @@ function MiCuenta({
 
               <div className="perfil-identidad">
                 <h2>{nombreUsuario}</h2>
-                <span className="perfil-rol">
-                  {esConductor ? "Conductor" : "Pasajero"}
-                </span>
+                <span className="perfil-rol">{nombreRol}</span>
               </div>
             </div>
 
@@ -591,14 +590,13 @@ function MiCuenta({
             {mensajeFoto && (
               <p
                 className={`mensaje-foto ${tipoMensajeFoto === "error"
-                  ? "mensaje-foto-error"
-                  : "mensaje-foto-exito"
+                    ? "mensaje-foto-error"
+                    : "mensaje-foto-exito"
                   }`}
               >
                 {mensajeFoto}
               </p>
             )}
-
 
             <div className="perfil-datos">
               <div className="dato-perfil">
@@ -613,7 +611,7 @@ function MiCuenta({
 
               <div className="dato-perfil">
                 <span className="dato-etiqueta">Tipo de cuenta</span>
-                <strong>{esConductor ? "Conductor" : "Pasajero"}</strong>
+                <strong>{nombreRol}</strong>
               </div>
 
               <form className="formulario-telefono" onSubmit={guardarTelefono}>
@@ -664,23 +662,26 @@ function MiCuenta({
             <div className="tarjeta-icono">TG</div>
             <span className="tarjeta-etiqueta">TU EXPERIENCIA</span>
             <h2>
-              {esConductor
-                ? "Comparte tus rutas con la comunidad"
-                : "Encuentra una forma más organizada de viajar"}
+              {esAdministrador
+                ? "Gestiona la comunidad TdeA GO"
+                : esConductor
+                  ? "Comparte tus rutas con la comunidad"
+                  : "Encuentra una forma más organizada de viajar"}
             </h2>
             <p>
-              {esConductor
-                ? "Administra tu vehículo y publica rutas para que otros estudiantes puedan solicitar un cupo."
-                : "Consulta las rutas disponibles y solicita un cupo según tus necesidades de desplazamiento."}
+              {esAdministrador
+                ? "Administra los usuarios y supervisa la gestión de la plataforma."
+                : esConductor
+                  ? "Administra tu vehículo y publica rutas para que otros estudiantes puedan solicitar un cupo."
+                  : "Consulta las rutas disponibles y solicita un cupo según tus necesidades de desplazamiento."}
             </p>
           </article>
         </div>
 
-        {(
-          esConductor ||
-          usuario?.requiere_vehiculo === true ||
-          usuario?.rol_solicitado?.toLowerCase() === "conductor"
-        ) && (
+        {!esAdministrador &&
+          (esConductor ||
+            usuario?.requiere_vehiculo === true ||
+            usuario?.rol_solicitado?.toLowerCase() === "conductor") && (
             <section className="seccion-experiencia">
               <div className="titulo-seccion">
                 <span>MI VEHÍCULO</span>

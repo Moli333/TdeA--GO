@@ -67,7 +67,10 @@ function Login({ onLoginExitoso }) {
       }
 
       if (onLoginExitoso) {
-        onLoginExitoso(datos.usuario);
+        onLoginExitoso({
+          ...datos.usuario,
+          token: datos.token,
+        });
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error);

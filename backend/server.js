@@ -13,6 +13,72 @@ app.use(express.json());
 const dbClient = supabaseAdmin || supabase;
 
 // ------------------------------------------------------------------
+// SEGURIDAD DE ADMINISTRACIÓN
+// ------------------------------------------------------------------
+
+const ADMINISTRADORA_PRINCIPAL_ID =
+  "2f1ea263-8be4-48be-99f7-b75e4408265f";
+
+// Verificar que la solicitud venga de una cuenta autenticada.
+async function verificarAutenticacion(req, res, next) {
+  try {
+    const encabezado = req.headers.authorization || "";
+    const token = encabezado.startsWith("Bearer ")
+      ? encabezado.substring(7)
+      : null;
+
+    if (!token) {
+      return res.status(401).json({
+        mensaje: "Debes iniciar sesión para realizar esta operación.",
+      });
+    }
+
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data.user) {
+      return res.status(401).json({
+        mensaje: "La sesión no es válida o ha expirado.",
+      });
+    }
+
+    req.usuarioAutenticado = data.user;
+    next();
+  } catch (error) {
+    console.error("Error verificando autenticación:", error);
+
+    return res.status(401).json({
+      mensaje: "No fue posible verificar tu sesión.",
+    });
+  }
+}
+
+// Comprobar que el usuario autenticado tenga rol administrador.
+async function verificarAdministrador(req, res, next) {
+  try {
+    const { data: perfil, error } = await dbClient
+      .from("profiles")
+      .select("id, nombre_completo, correo, rol")
+      .eq("id", req.usuarioAutenticado.id)
+      .maybeSingle();
+
+    if (error || !perfil || perfil.rol !== "administrador") {
+      return res.status(403).json({
+        mensaje: "No tienes permisos de administrador.",
+      });
+    }
+
+    req.perfilAutenticado = perfil;
+    next();
+  } catch (error) {
+    console.error("Error verificando administrador:", error);
+
+    return res.status(500).json({
+      mensaje: "No fue posible verificar tus permisos.",
+    });
+  }
+}
+
+// ------------------------------------------------------------------
 // CONFIGURACIÓN PARA RECIBIR FOTOS
 // ------------------------------------------------------------------
 
@@ -444,105 +510,381 @@ app.post("/api/login", async (req, res) => {
 // GET /api/usuarios
 // ------------------------------------------------------------------
 
-app.get("/api/usuarios", async (req, res) => {
-  try {
-    const { data, error } = await dbClient
-      .from("profiles")
-      .select("*")
-      .order("creado_en", {
-        ascending: false,
+app.get(
+  "/api/usuarios",
+  verificarAutenticacion,
+  verificarAdministrador,
+  async (req, res) => {
+    try {
+      const { data, error } = await dbClient
+        .from("profiles")
+        .select("*")
+        .order("creado_en", {
+          ascending: false,
+        });
+
+      if (error) throw error;
+
+      return res.json(data || []);
+    } catch (error) {
+      console.error("Error obteniendo usuarios:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar los usuarios.",
       });
-
-    if (error) {
-      throw error;
     }
-
-    res.json(data || []);
-  } catch (error) {
-    console.error("Error obteniendo usuarios:", error);
-
-    res.status(500).json({
-      mensaje: "No fue posible consultar los usuarios.",
-    });
   }
-});
+);
 
 // ------------------------------------------------------------------
 // 5. CAMBIAR ROL
 // PUT /api/usuarios/:id/rol
 // ------------------------------------------------------------------
 
-app.put("/api/usuarios/:id/rol", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { rol } = req.body;
 
-    if (!["conductor", "pasajero"].includes(rol)) {
-      return res.status(400).json({
-        mensaje: "El rol indicado no es válido.",
-      });
-    }
+app.put(
+  "/api/usuarios/:id/rol",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { rol } = req.body;
+      const idAutenticado = req.usuarioAutenticado.id;
 
-    if (rol === "conductor") {
-      const {
-        data: vehiculo,
-        error: errorVehiculo,
-      } = await dbClient
-        .from("vehiculos")
-        .select("id")
-        .eq("usuario_id", id)
-        .limit(1)
+      // Cada usuario solamente puede modificar su propio rol.
+      if (id !== idAutenticado) {
+        return res.status(403).json({
+          mensaje: "No puedes modificar el rol de otro usuario.",
+        });
+      }
+
+      // Este endpoint solamente permite los roles normales.
+      if (!["conductor", "pasajero"].includes(rol)) {
+        return res.status(403).json({
+          mensaje:
+            "No puedes modificar ni asignar privilegios administrativos desde esta opción.",
+        });
+      }
+
+      // Consultar el perfil actual antes de permitir el cambio.
+      const { data: perfil, error: errorPerfil } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", idAutenticado)
         .maybeSingle();
 
-      if (errorVehiculo) {
-        console.error(
-          "Error verificando el vehículo del usuario:",
-          errorVehiculo
-        );
+      if (errorPerfil) {
+        console.error("Error consultando perfil:", errorPerfil);
 
         return res.status(500).json({
-          mensaje:
-            "No fue posible verificar el vehículo registrado. Inténtalo nuevamente.",
+          mensaje: "No fue posible verificar tu perfil.",
         });
       }
 
-      if (!vehiculo) {
+      if (!perfil) {
+        return res.status(404).json({
+          mensaje: "No se encontró tu perfil de usuario.",
+        });
+      }
+
+      // Ningún administrador puede quitarse o cambiar
+      // sus privilegios desde el menú normal.
+      if (perfil.rol === "administrador") {
+        return res.status(403).json({
+          mensaje:
+            "Los administradores no pueden modificar sus privilegios desde esta opción.",
+        });
+      }
+
+      // La administradora principal tiene protección adicional.
+      if (idAutenticado === ADMINISTRADORA_PRINCIPAL_ID) {
+        return res.status(403).json({
+          mensaje: "El rol de la administradora principal está protegido.",
+        });
+      }
+
+      // Para ser conductor debe existir un vehículo registrado.
+      if (rol === "conductor") {
+        const { data: vehiculo, error: errorVehiculo } =
+          await dbClient
+            .from("vehiculos")
+            .select("id")
+            .eq("usuario_id", idAutenticado)
+            .maybeSingle();
+
+        if (errorVehiculo) {
+          console.error("Error verificando vehículo:", errorVehiculo);
+
+          return res.status(500).json({
+            mensaje: "No fue posible verificar tu vehículo.",
+          });
+        }
+
+        if (!vehiculo) {
+          return res.status(400).json({
+            mensaje:
+              "Para ser conductor, primero debes registrar tu vehículo.",
+            requiereVehiculo: true,
+          });
+        }
+      }
+
+      // Actualizar el rol únicamente después de las validaciones.
+      const { data, error } = await dbClient
+        .from("profiles")
+        .update({ rol })
+        .eq("id", idAutenticado)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return res.json({
+        mensaje: "Rol actualizado correctamente.",
+        usuario: data,
+      });
+    } catch (error) {
+      console.error("Error actualizando rol:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible actualizar el rol.",
+      });
+    }
+  }
+);
+
+
+/* =========================================================
+   ADMINISTRACIÓN DE PRIVILEGIOS
+   Exclusivo de la administradora principal
+   ========================================================= */
+
+app.put(
+  "/api/admin/usuarios/:id/rol",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { accion } = req.body;
+
+      const idAutenticado = req.usuarioAutenticado.id;
+
+      // Solo la cuenta principal puede administrar privilegios.
+      if (idAutenticado !== ADMINISTRADORA_PRINCIPAL_ID) {
+        return res.status(403).json({
+          mensaje:
+            "No tienes autorización para administrar privilegios.",
+        });
+      }
+
+      // Verificar que la cuenta principal conserve su rol.
+      const { data: administradora, error: errorAdministradora } =
+        await dbClient
+          .from("profiles")
+          .select("id, rol")
+          .eq("id", idAutenticado)
+          .maybeSingle();
+
+      if (errorAdministradora) throw errorAdministradora;
+
+      if (!administradora || administradora.rol !== "administrador") {
+        return res.status(403).json({
+          mensaje:
+            "La cuenta principal no tiene los privilegios administrativos requeridos.",
+        });
+      }
+
+      // No se permite modificar la cuenta principal.
+      if (id === ADMINISTRADORA_PRINCIPAL_ID) {
+        return res.status(403).json({
+          mensaje:
+            "No puedes modificar los privilegios de la administradora principal.",
+        });
+      }
+
+      // Validar la acción solicitada.
+      if (!["conceder", "retirar"].includes(accion)) {
         return res.status(400).json({
           mensaje:
-            "Para ser conductor, primero debes registrar tu vehículo.",
-          requiereVehiculo: true,
+            "Acción no válida. Utiliza conceder o retirar.",
         });
       }
+
+      // Consultar la cuenta que se desea modificar.
+      const { data: perfil, error: errorPerfil } = await dbClient
+        .from("profiles")
+        .select("id, nombre_completo, correo, rol")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (errorPerfil) throw errorPerfil;
+
+      if (!perfil) {
+        return res.status(404).json({
+          mensaje: "No se encontró el usuario seleccionado.",
+        });
+      }
+
+      let nuevoRol;
+
+      if (accion === "conceder") {
+        nuevoRol = "administrador";
+      } else {
+        // Al retirar el privilegio, comprobar si tiene vehículo.
+        const { data: vehiculo, error: errorVehiculo } =
+          await dbClient
+            .from("vehiculos")
+            .select("id")
+            .eq("usuario_id", id)
+            .maybeSingle();
+
+        if (errorVehiculo) throw errorVehiculo;
+
+        nuevoRol = vehiculo ? "conductor" : "pasajero";
+      }
+
+      // Actualizar el privilegio.
+      const { data: usuarioActualizado, error: errorActualizacion } =
+        await dbClient
+          .from("profiles")
+          .update({ rol: nuevoRol })
+          .eq("id", id)
+          .select("id, nombre_completo, correo, rol")
+          .single();
+
+      if (errorActualizacion) throw errorActualizacion;
+
+      return res.json({
+        mensaje:
+          accion === "conceder"
+            ? "Privilegios de administrador concedidos correctamente."
+            : "Privilegios administrativos retirados correctamente.",
+        usuario: usuarioActualizado,
+      });
+
+    } catch (error) {
+      console.error(
+        "Error administrando privilegios:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "No fue posible completar la operación administrativa.",
+      });
     }
-
-    const { data, error } = await dbClient
-      .from("profiles")
-      .update({ rol })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return res.json({
-      mensaje: "Rol actualizado correctamente.",
-      usuario: data,
-    });
-  } catch (error) {
-    console.error("Error actualizando rol:", error);
-
-    res.status(500).json({
-      mensaje: "No fue posible actualizar el rol.",
-    });
   }
-});
+);
 
 // ------------------------------------------------------------------
 // ACTUALIZAR TELÉFONO DEL PERFIL
 // PUT /api/usuarios/:id/telefono
 // ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// ADMINISTRACIÓN DE PRIVILEGIOS
+// Solo la administradora principal puede conceder o retirar
+// el rol de administrador.
+// ------------------------------------------------------------------
+
+app.put(
+  "/api/admin/usuarios/:id/rol",
+  verificarAutenticacion,
+  verificarAdministrador,
+  async (req, res) => {
+    try {
+      const idObjetivo = req.params.id;
+      const { accion } = req.body;
+
+      // Solo Mónica puede utilizar esta operación.
+      if (
+        req.usuarioAutenticado.id !== ADMINISTRADORA_PRINCIPAL_ID
+      ) {
+        return res.status(403).json({
+          mensaje:
+            "Solo la administradora principal puede gestionar los privilegios administrativos.",
+        });
+      }
+
+      // Nadie puede modificar el privilegio de Mónica.
+      if (idObjetivo === ADMINISTRADORA_PRINCIPAL_ID) {
+        return res.status(403).json({
+          mensaje:
+            "El privilegio de la administradora principal no puede modificarse.",
+        });
+      }
+
+      if (!["conceder", "retirar"].includes(accion)) {
+        return res.status(400).json({
+          mensaje: "La acción indicada no es válida.",
+        });
+      }
+
+      const { data: usuarioObjetivo, error: errorUsuario } =
+        await dbClient
+          .from("profiles")
+          .select("id, nombre_completo, correo, rol")
+          .eq("id", idObjetivo)
+          .maybeSingle();
+
+      if (errorUsuario) throw errorUsuario;
+
+      if (!usuarioObjetivo) {
+        return res.status(404).json({
+          mensaje: "No se encontró el usuario seleccionado.",
+        });
+      }
+
+      let nuevoRol;
+
+      if (accion === "conceder") {
+        nuevoRol = "administrador";
+      } else {
+        if (usuarioObjetivo.rol !== "administrador") {
+          return res.status(400).json({
+            mensaje: "El usuario seleccionado no es administrador.",
+          });
+        }
+
+        // Al retirar el privilegio, conservar el rol de conductor
+        // si tiene vehículo registrado.
+        const { data: vehiculo, error: errorVehiculo } =
+          await dbClient
+            .from("vehiculos")
+            .select("id")
+            .eq("usuario_id", idObjetivo)
+            .maybeSingle();
+
+        if (errorVehiculo) throw errorVehiculo;
+
+        nuevoRol = vehiculo ? "conductor" : "pasajero";
+      }
+
+      const { data, error } = await dbClient
+        .from("profiles")
+        .update({ rol: nuevoRol })
+        .eq("id", idObjetivo)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return res.json({
+        mensaje:
+          accion === "conceder"
+            ? "Privilegio de administrador concedido correctamente."
+            : "Privilegio de administrador retirado correctamente.",
+        usuario: data,
+      });
+    } catch (error) {
+      console.error("Error administrando privilegios:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible modificar los privilegios.",
+      });
+    }
+  }
+);
 
 app.put("/api/usuarios/:id/telefono", async (req, res) => {
   try {
@@ -1098,7 +1440,7 @@ app.post("/api/solicitudes", async (req, res) => {
     if (errorRuta) throw errorRuta;
 
     console.log("📍 Ruta encontrada en la BD:", ruta); // <--- ESTE LOG NOS DIRÁ QUÉ TRAJO
-    
+
     if (!ruta) {
       return res.status(404).json({
         mensaje: "La ruta no existe.",

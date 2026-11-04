@@ -5,6 +5,7 @@ import RegistrarVehiculo from "./paginas/RegistrarVehiculo";
 import SolicitarViajeNuevo from "./paginas/SolicitarViajeNuevo";
 import MisSolicitudesNuevas from "./paginas/MisSolicitudesNuevas";
 import MisNotificaciones from "./paginas/MisNotificaciones";
+import Administrador from "./pages/Administrador";
 
 import {
   BrowserRouter,
@@ -246,14 +247,17 @@ function Aplicacion() {
     setMostrarMenuUsuario(false);
 
     navegar(
-      usuarioFinal.requiere_vehiculo
-        ? "/mi-cuenta"
-        : "/mis-solicitudes"
+      usuarioFinal.rol?.toLowerCase() === "administrador"
+        ? "/admin"
+        : usuarioFinal.requiere_vehiculo
+          ? "/mi-cuenta"
+          : "/mis-solicitudes"
     );
   };
 
   const cerrarSesion = () => {
     localStorage.removeItem("tdea_go_usuario");
+    sessionStorage.removeItem("tdea_go_usuario");
 
     setUsuario(null);
     setMostrarMenuUsuario(false);
@@ -264,51 +268,45 @@ function Aplicacion() {
   const cambiarRol = async (nuevoRol) => {
     if (!usuario || cambiandoRol) return;
 
-    setMostrarMenuUsuario(false);
-
-    if (nuevoRol === "pasajero") {
-      const usuarioActualizado = {
-        ...usuario,
-        rol: "pasajero",
-        rol_solicitado: "pasajero",
-        requiere_vehiculo: false,
-      };
-
-      actualizarUsuario(usuarioActualizado);
-      localStorage.removeItem("tdea_go_registro_pendiente");
-      navegar("/buscar");
+    // Los administradores no pueden cambiar su privilegio
+    // mediante el menú normal de usuario.
+    if (!["conductor", "pasajero"].includes(usuario.rol?.toLowerCase())) {
+      alert("Tu cuenta no puede cambiar de rol desde esta opción.");
       return;
     }
 
-    if (nuevoRol !== "conductor") return;
+    if (!["conductor", "pasajero"].includes(nuevoRol)) return;
 
     const idUsuario = usuario.id || usuario.id_usuario;
+    const token = usuario.token || usuario.access_token;
 
-    if (!idUsuario) {
-      alert("No se pudo identificar tu cuenta. Inicia sesión nuevamente.");
+    if (!idUsuario || !token) {
+      alert("Tu sesión no tiene una autenticación válida. Cierra sesión e inicia nuevamente.");
       return;
     }
+
+    setMostrarMenuUsuario(false);
 
     try {
       setCambiandoRol(true);
 
-      // El servidor verifica si el usuario tiene un vehículo registrado.
       const respuesta = await fetch(
         `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ rol: "conductor" }),
+          body: JSON.stringify({ rol: nuevoRol }),
         }
       );
 
       const datos = await respuesta.json();
 
-      // Si no tiene vehículo, mostramos la ventana emergente.
       if (
         !respuesta.ok &&
+        nuevoRol === "conductor" &&
         (
           datos.requiereVehiculo === true ||
           datos.requiere_vehiculo === true
@@ -320,16 +318,15 @@ function Aplicacion() {
 
       if (!respuesta.ok) {
         throw new Error(
-          datos.mensaje || "No fue posible activar el rol de conductor."
+          datos.mensaje || "No fue posible actualizar tu rol."
         );
       }
 
-      // Actualizamos la sesión sin cerrar sesión ni volver a iniciar.
       const usuarioActualizado = {
         ...usuario,
         ...(datos.usuario || datos.perfil || {}),
-        rol: "conductor",
-        rol_solicitado: "conductor",
+        rol: nuevoRol,
+        rol_solicitado: nuevoRol,
         requiere_vehiculo: false,
       };
 
@@ -337,10 +334,13 @@ function Aplicacion() {
 
       localStorage.removeItem("tdea_go_registro_pendiente");
       setMostrarModalVehiculo(false);
+      setMostrarFormularioVehiculo(false);
 
-      navegar("/mis-rutas");
+      navegar(
+        nuevoRol === "conductor" ? "/mis-rutas" : "/buscar"
+      );
     } catch (error) {
-      console.error("Error al activar el rol de conductor:", error);
+      console.error("Error al cambiar el rol:", error);
       alert(error.message || "Ocurrió un error al cambiar de rol.");
     } finally {
       setCambiandoRol(false);
@@ -359,9 +359,10 @@ function Aplicacion() {
     }
 
     const idUsuario = usuario?.id || usuario?.id_usuario;
+    const token = usuario?.token || usuario?.access_token;
 
-    if (!idUsuario) {
-      alert("No se pudo identificar tu cuenta. Inicia sesión nuevamente.");
+    if (!idUsuario || !token) {
+      alert("No se pudo validar tu sesión. Inicia sesión nuevamente.");
       return;
     }
 
@@ -374,6 +375,7 @@ function Aplicacion() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ rol: "conductor" }),
         }
@@ -449,6 +451,7 @@ function Aplicacion() {
 
   const esConductor = obtenerRolUsuario() === "conductor";
   const esPasajero = obtenerRolUsuario() === "pasajero";
+  const esAdministrador = obtenerRolUsuario() === "administrador";
   const fotoUsuario = usuario?.foto_url || null;
 
   return (
@@ -525,7 +528,11 @@ function Aplicacion() {
                       <strong>{obtenerNombreUsuario()}</strong>
 
                       <span className="rol-actual">
-                        {esConductor ? "Conductor" : "Pasajero"}
+                        {esAdministrador
+                          ? "Administradora"
+                          : esConductor
+                            ? "Conductor"
+                            : "Pasajero"}
                       </span>
                     </div>
 
@@ -798,6 +805,22 @@ function Aplicacion() {
                   API_URL={API_URL}
                 />
               </RutaSoloConductor>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              usuario?.rol?.toLowerCase() === "administrador" ? (
+                <Administrador
+                  usuario={usuario}
+                  API_URL={API_URL}
+                  onCerrarSesion={cerrarSesion}
+                  onInicio={() => navegar("/")}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
         </Routes>

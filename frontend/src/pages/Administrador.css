@@ -1,0 +1,563 @@
+
+/* ==========================================
+   TdeA GO - PANEL DE ADMINISTRACIÓN
+   Diseño independiente y responsive
+========================================== */
+
+.pagina-administrador {
+  --admin-azul: #174b83;
+  --admin-azul-oscuro: #10365f;
+  --admin-verde: #239b68;
+  --admin-fondo: #f3f6fa;
+  --admin-texto: #253449;
+  --admin-gris: #718096;
+
+  min-height: 100vh;
+  background: var(--admin-fondo);
+  color: var(--admin-texto);
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.pagina-administrador * {
+  box-sizing: border-box;
+}
+
+/* ENCABEZADO */
+
+.pagina-administrador .admin-encabezado {
+  background: #fff;
+  border-bottom: 1px solid #e5eaf0;
+  box-shadow: 0 2px 10px rgba(20, 45, 75, .05);
+}
+
+.pagina-administrador .admin-encabezado-contenedor {
+  max-width: 1400px;
+  min-height: 78px;
+  padding: 12px 35px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 25px;
+}
+
+.pagina-administrador .admin-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--admin-azul);
+}
+
+.pagina-administrador .admin-logo-icono {
+  font-size: 32px;
+}
+
+.pagina-administrador .admin-logo-texto {
+  display: flex;
+  align-items: center;
+  font-size: 23px;
+  font-weight: 800;
+  gap: 3px;
+}
+
+.pagina-administrador .admin-logo-texto span {
+  color: var(--admin-verde);
+}
+
+.pagina-administrador .admin-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--admin-azul);
+}
+
+.pagina-administrador .admin-usuario {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagina-administrador .admin-avatar {
+  width: 43px;
+  height: 43px;
+  border-radius: 50%;
+  background: #e4eef9;
+  color: var(--admin-azul);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.pagina-administrador .admin-datos-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pagina-administrador .admin-datos-usuario strong {
+  font-size: 13px;
+}
+
+.pagina-administrador .admin-datos-usuario span {
+  color: var(--admin-verde);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pagina-administrador .admin-cerrar-sesion {
+  border: 1px solid #e0e6ed;
+  background: white;
+  color: #596579;
+  padding: 10px 15px;
+  border-radius: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagina-administrador .admin-cerrar-sesion:hover {
+  background: #fff1f1;
+  color: #c03939;
+}
+
+/* CONTENIDO */
+
+.pagina-administrador .admin-contenido {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 35px;
+  flex: 1;
+}
+
+.pagina-administrador .admin-bienvenida {
+  background: linear-gradient(115deg, #174b83, #246da9);
+  color: white;
+  padding: 36px 40px;
+  border-radius: 17px;
+  margin-bottom: 25px;
+  box-shadow: 0 8px 22px rgba(23, 75, 131, .15);
+}
+
+.pagina-administrador .admin-etiqueta {
+  display: inline-block;
+  color: #c9e8ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.pagina-administrador .admin-bienvenida h1 {
+  color: white;
+  font-size: 29px;
+  margin: 0 0 10px;
+}
+
+.pagina-administrador .admin-bienvenida p {
+  color: #e5f1fc;
+  margin: 0;
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* NAVEGACIÓN */
+
+.pagina-administrador .admin-menu {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.pagina-administrador .admin-menu-boton {
+  min-height: 85px;
+  padding: 16px;
+  border: 1px solid #e5eaf0;
+  border-radius: 12px;
+  background: white;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: .2s ease;
+  color: var(--admin-texto);
+}
+
+.pagina-administrador .admin-menu-boton:hover {
+  border-color: #9bbddd;
+  transform: translateY(-2px);
+}
+
+.pagina-administrador .admin-menu-boton.seleccionado {
+  border: 2px solid var(--admin-azul);
+  background: #edf5fd;
+}
+
+.pagina-administrador .admin-menu-icono {
+  font-size: 27px;
+}
+
+.pagina-administrador .admin-menu-boton > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pagina-administrador .admin-menu-boton strong {
+  font-size: 14px;
+}
+
+.pagina-administrador .admin-menu-boton small {
+  color: var(--admin-gris);
+  font-size: 11px;
+}
+
+/* SECCIONES */
+
+.pagina-administrador .admin-seccion {
+  background: white;
+  padding: 27px;
+  border: 1px solid #e8edf2;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(30, 50, 80, .04);
+  margin-bottom: 25px;
+  min-width: 0;
+}
+
+.pagina-administrador .admin-seccion-titulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.pagina-administrador .admin-seccion-titulo h2 {
+  font-size: 21px;
+  color: var(--admin-azul-oscuro);
+  margin: 0 0 7px;
+}
+
+.pagina-administrador .admin-seccion-titulo p {
+  font-size: 13px;
+  color: var(--admin-gris);
+  margin: 0;
+}
+
+/* TARJETAS */
+
+.pagina-administrador .admin-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 17px;
+  margin-top: 25px;
+}
+
+.pagina-administrador .admin-tarjeta {
+  border: 1px solid #e8edf2;
+  border-radius: 13px;
+  padding: 20px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagina-administrador .admin-tarjeta-icono {
+  width: 46px;
+  height: 46px;
+  background: #edf5fd;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 23px;
+}
+
+.pagina-administrador .admin-tarjeta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pagina-administrador .admin-tarjeta > div span {
+  color: var(--admin-gris);
+  font-size: 12px;
+}
+
+.pagina-administrador .admin-tarjeta > div strong {
+  color: var(--admin-azul);
+  font-size: 25px;
+}
+
+.pagina-administrador .admin-tarjeta > small {
+  grid-column: 1 / -1;
+  color: var(--admin-gris);
+  font-size: 11px;
+}
+
+/* INFORMACIÓN */
+
+.pagina-administrador .admin-panel-informativo {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 20px;
+  margin-top: 25px;
+  background: #edf5fd;
+  border: 1px solid #d8e8f7;
+  border-radius: 11px;
+}
+
+.pagina-administrador .admin-panel-informativo > span {
+  font-size: 23px;
+}
+
+.pagina-administrador .admin-panel-informativo strong {
+  color: var(--admin-azul);
+  font-size: 14px;
+}
+
+.pagina-administrador .admin-panel-informativo p {
+  color: #596b80;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 7px 0 0;
+}
+
+/* BOTONES Y BÚSQUEDA */
+
+.pagina-administrador .admin-seccion button:not(.admin-menu-boton) {
+  cursor: pointer;
+}
+
+.pagina-administrador .admin-seccion-titulo button,
+.pagina-administrador .admin-seccion tbody button {
+  border: none;
+  background: var(--admin-azul);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pagina-administrador .admin-seccion button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.pagina-administrador .admin-seccion input[type="search"] {
+  width: 100%;
+  max-width: 450px;
+  padding: 12px 15px !important;
+  border: 1px solid #dce4ed !important;
+  border-radius: 9px !important;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.pagina-administrador .admin-seccion input:focus {
+  border-color: var(--admin-azul) !important;
+  box-shadow: 0 0 0 3px rgba(23, 75, 131, .1);
+}
+
+/* TABLA DE USUARIOS */
+
+.pagina-administrador .admin-seccion table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  background: white;
+  font-size: 13px;
+}
+
+.pagina-administrador .admin-seccion th {
+  background: #edf3f9;
+  color: var(--admin-azul-oscuro);
+  font-weight: 700;
+}
+
+.pagina-administrador .admin-seccion td,
+.pagina-administrador .admin-seccion th {
+  padding: 14px 12px !important;
+  border-bottom: 1px solid #e8edf2;
+  text-align: left;
+}
+
+.pagina-administrador .admin-seccion tbody tr:hover {
+  background: #f7fafd;
+}
+
+.pagina-administrador .admin-contenido-vacio {
+  padding: 35px 20px;
+  text-align: center;
+  background: #f7f9fc;
+  border: 1px dashed #d5dfeb;
+  border-radius: 12px;
+  color: var(--admin-gris);
+}
+
+.pagina-administrador .admin-contenido-vacio > span {
+  font-size: 32px;
+}
+
+.pagina-administrador .admin-contenido-vacio h3 {
+  color: var(--admin-azul);
+  margin: 10px 0;
+}
+
+/* PIE DE PÁGINA */
+
+.pagina-administrador .admin-footer {
+  width: 100%;
+  padding: 22px 35px;
+  background: white;
+  border-top: 1px solid #e5eaf0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.pagina-administrador .admin-footer > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pagina-administrador .admin-footer strong {
+  color: var(--admin-azul);
+  font-size: 16px;
+}
+
+.pagina-administrador .admin-footer span {
+  color: var(--admin-gris);
+  font-size: 12px;
+}
+
+.pagina-administrador .admin-volver-inicio {
+  border: none;
+  background: transparent;
+  color: var(--admin-azul);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 10px;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+  .pagina-administrador .admin-menu {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pagina-administrador .admin-tarjetas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .pagina-administrador .admin-encabezado-contenedor {
+    padding: 13px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .pagina-administrador .admin-titulo {
+    display: none;
+  }
+
+  .pagina-administrador .admin-usuario {
+    margin-left: auto;
+    gap: 7px;
+  }
+
+  .pagina-administrador .admin-datos-usuario strong {
+    max-width: 105px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pagina-administrador .admin-cerrar-sesion {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .pagina-administrador .admin-contenido {
+    padding: 18px 13px;
+  }
+
+  .pagina-administrador .admin-bienvenida {
+    padding: 25px 20px;
+  }
+
+  .pagina-administrador .admin-bienvenida h1 {
+    font-size: 23px;
+  }
+
+  .pagina-administrador .admin-menu {
+    gap: 9px;
+  }
+
+  .pagina-administrador .admin-menu-boton {
+    padding: 12px 9px;
+    min-height: 75px;
+    gap: 8px;
+  }
+
+  .pagina-administrador .admin-menu-icono {
+    font-size: 21px;
+  }
+
+  .pagina-administrador .admin-menu-boton strong {
+    font-size: 12px;
+  }
+
+  .pagina-administrador .admin-menu-boton small {
+    font-size: 10px;
+  }
+
+  .pagina-administrador .admin-seccion {
+    padding: 17px 13px;
+  }
+
+  .pagina-administrador .admin-seccion-titulo {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pagina-administrador .admin-tarjetas {
+    gap: 9px;
+  }
+
+  .pagina-administrador .admin-tarjeta {
+    padding: 12px;
+    grid-template-columns: 36px 1fr;
+    gap: 8px;
+  }
+
+  .pagina-administrador .admin-tarjeta-icono {
+    width: 35px;
+    height: 35px;
+    font-size: 18px;
+  }
+
+  .pagina-administrador .admin-tarjeta > div strong {
+    font-size: 21px;
+  }
+
+  .pagina-administrador .admin-footer {
+    padding: 18px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -119,7 +119,8 @@ function MiCuenta({
       };
 
       actualizarUsuario?.(usuarioActualizado);
-      localStorage.setItem(
+
+      sessionStorage.setItem(
         "tdea_go_usuario",
         JSON.stringify(usuarioActualizado)
       );

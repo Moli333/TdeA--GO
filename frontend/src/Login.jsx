@@ -106,7 +106,7 @@ function Login({ onLoginExitoso }) {
       console.error("Error al solicitar recuperación:", error);
       setError(
         error.message ||
-          "No fue posible solicitar la recuperación. Inténtalo de nuevo."
+        "No fue posible solicitar la recuperación. Inténtalo de nuevo."
       );
     } finally {
       setCargando(false);
@@ -172,12 +172,12 @@ function Login({ onLoginExitoso }) {
 
       const mensajeBackend =
         datos.mensaje ||
-        "Tu cuenta se creó correctamente. Revisa tu correo institucional para confirmar tu dirección.";
+        "Tu cuenta se creó correctamente. Revisa tu correo electrónico y confirma tu cuenta.";
 
       const mensajeRol =
         rol === "conductor"
-          ? "Después de confirmar tu correo, inicia sesión para continuar con el registro de tu vehículo."
-          : "Después de confirmar tu correo, podrás iniciar sesión para ingresar a TdeA GO.";
+          ? "Después de confirmar tu correo, inicia sesión y registra tu vehículo para habilitar tu perfil de conductor."
+          : "Después de confirmar tu correo, podrás iniciar sesión y acceder a TdeA GO.";
 
       setMensaje(`${mensajeBackend} ${mensajeRol}`);
 
@@ -444,9 +444,8 @@ function Login({ onLoginExitoso }) {
               <div className="role-options">
                 <button
                   type="button"
-                  className={`role-option ${
-                    rol === "pasajero" ? "selected" : ""
-                  }`}
+                  className={`role-option ${rol === "pasajero" ? "selected" : ""
+                    }`}
                   onClick={() => {
                     setRol("pasajero");
                     setError("");
@@ -462,9 +461,8 @@ function Login({ onLoginExitoso }) {
 
                 <button
                   type="button"
-                  className={`role-option ${
-                    rol === "conductor" ? "selected" : ""
-                  }`}
+                  className={`role-option ${rol === "conductor" ? "selected" : ""
+                    }`}
                   onClick={() => {
                     setRol("conductor");
                     setError("");
@@ -488,23 +486,17 @@ function Login({ onLoginExitoso }) {
             )}
 
             {mensaje && (
-              <div className="login-success" role="status">
+              <div className="login-success registro-success" role="status">
                 <span className="login-success-icon">✓</span>
+
                 <span>{mensaje}</span>
+
                 <button
                   type="button"
+                  className="registro-login-button"
                   onClick={() => cambiarModo("login")}
-                  style={{
-                    display: "block",
-                    marginTop: "12px",
-                    padding: "8px 12px",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
                 >
-                  Ir a iniciar sesión
+                  Iniciar sesión
                 </button>
               </div>
             )}

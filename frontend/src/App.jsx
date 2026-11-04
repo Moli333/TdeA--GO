@@ -29,7 +29,11 @@ const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 function cargarUsuarioGuardado() {
-  const usuarioGuardado = localStorage.getItem("tdea_go_usuario");
+  // Eliminar sesiones antiguas que hayan quedado guardadas permanentemente.
+  localStorage.removeItem("tdea_go_usuario");
+
+  // Recuperar únicamente la sesión de la pestaña actual.
+  const usuarioGuardado = sessionStorage.getItem("tdea_go_usuario");
 
   if (!usuarioGuardado) {
     return null;
@@ -187,7 +191,7 @@ function Aplicacion() {
         ...datosActualizados,
       };
 
-      localStorage.setItem(
+      sessionStorage.setItem(
         "tdea_go_usuario",
         JSON.stringify(usuarioActualizado)
       );
@@ -233,7 +237,7 @@ function Aplicacion() {
 
     setUsuario(usuarioFinal);
 
-    localStorage.setItem(
+    sessionStorage.setItem(
       "tdea_go_usuario",
       JSON.stringify(usuarioFinal)
     );
@@ -686,7 +690,7 @@ function Aplicacion() {
             }
           />
 
-          
+
           <Route
             path="/buscar"
             element={

@@ -619,13 +619,6 @@ app.put(
       const { rol } = req.body;
       const idAutenticado = req.usuarioAutenticado.id;
 
-      // Cada usuario solamente puede modificar su propio rol.
-      if (id !== idAutenticado) {
-        return res.status(403).json({
-          mensaje: "No puedes modificar el rol de otro usuario.",
-        });
-      }
-
       // Este endpoint solamente permite los roles normales.
       if (!["conductor", "pasajero"].includes(rol)) {
         return res.status(403).json({

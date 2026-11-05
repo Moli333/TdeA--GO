@@ -1915,11 +1915,10 @@ app.get(
               foto_url
             ),
             ruta:rutas!solicitudes_viaje_viaje_id_fkey (
-              origen,
-              destino,
-              fecha,
-              hora
-            )
+            origen,
+            destino,
+            fecha_hora_salida
+          )
           `)
           .in("viaje_id", rutaIds)
           .order("fecha_solicitud", { ascending: false });

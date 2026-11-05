@@ -13,6 +13,7 @@ import "leaflet/dist/leaflet.css";
 import "./PublicarRuta.css";
 
 const UBICACION_INICIAL = [6.2442, -75.5812];
+const TOKEN_MAPBOX = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const iconoOrigen = L.divIcon({
   className: "marcador-personalizado",
@@ -112,6 +113,80 @@ function PublicarRuta({ usuario, API_URL }) {
 
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const [recorrido, setRecorrido] = useState(null);
+  const [cargandoRecorrido, setCargandoRecorrido] = useState(false);
+  const [errorRecorrido, setErrorRecorrido] = useState("");
+
+  useEffect(() => {
+    if (!ubicacionOrigen || !ubicacionDestino) {
+      return;
+    }
+
+    if (!TOKEN_MAPBOX) {
+      throw new Error(
+        "No está configurado el servicio de mapas."
+      );
+    }
+
+    const controlador = new AbortController();
+
+    const calcularRecorrido = async () => {
+      setCargandoRecorrido(true);
+      setErrorRecorrido("");
+
+      try {
+        const coordenadas = [
+          `${ubicacionOrigen.lng},${ubicacionOrigen.lat}`,
+          `${ubicacionDestino.lng},${ubicacionDestino.lat}`,
+        ].join(";");
+
+        const url =
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${coordenadas}` +
+          `?geometries=geojson&overview=full&steps=false&access_token=${TOKEN_MAPBOX}`;
+
+        const respuesta = await fetch(url, {
+          signal: controlador.signal,
+        });
+
+        if (!respuesta.ok) {
+          throw new Error(
+            "No fue posible calcular el recorrido."
+          );
+        }
+
+        const datos = await respuesta.json();
+
+        if (!datos.routes || !datos.routes.length) {
+          throw new Error(
+            "No se encontró una ruta en automóvil entre los puntos seleccionados."
+          );
+        }
+
+        const ruta = datos.routes[0];
+
+        setRecorrido({
+          coordenadas: ruta.geometry.coordinates.map(
+            ([lng, lat]) => [lat, lng]
+          ),
+          distancia: ruta.distance / 1000,
+          duracion: ruta.duration / 60,
+        });
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setRecorrido(null);
+          setErrorRecorrido(error.message);
+        }
+      } finally {
+        if (!controlador.signal.aborted) {
+          setCargandoRecorrido(false);
+        }
+      }
+    };
+
+    calcularRecorrido();
+
+    return () => controlador.abort();
+  }, [ubicacionOrigen, ubicacionDestino]);
 
   const obtenerCoordenadas = async (lugar) => {
     const respuesta = await fetch(
@@ -381,7 +456,7 @@ function PublicarRuta({ usuario, API_URL }) {
       if (!respuesta.ok) {
         throw new Error(
           datos.mensaje ||
-            "No fue posible publicar la ruta."
+          "No fue posible publicar la ruta."
         );
       }
 
@@ -818,12 +893,12 @@ function PublicarRuta({ usuario, API_URL }) {
 
               <span>
                 {modoSeleccion ===
-                "origen"
+                  "origen"
                   ? "Haz clic en el mapa para seleccionar el punto de origen."
                   : modoSeleccion ===
                     "destino"
-                  ? "Haz clic en el mapa para seleccionar el punto de destino."
-                  : "Puedes seleccionar una ubicación directamente sobre el mapa."}
+                    ? "Haz clic en el mapa para seleccionar el punto de destino."
+                    : "Puedes seleccionar una ubicación directamente sobre el mapa."}
               </span>
 
             </div>
@@ -895,28 +970,16 @@ function PublicarRuta({ usuario, API_URL }) {
                     </Popup>
                   </Marker>
                 )}
-
-                {ubicacionOrigen &&
-                  ubicacionDestino && (
-                    <Polyline
-                      positions={[
-                        [
-                          ubicacionOrigen.lat,
-                          ubicacionOrigen.lng,
-                        ],
-                        [
-                          ubicacionDestino.lat,
-                          ubicacionDestino.lng,
-                        ],
-                      ]}
-                      pathOptions={{
-                        color: "#0b5f91",
-                        weight: 5,
-                        opacity: 0.8,
-                        dashArray: "10 8",
-                      }}
-                    />
-                  )}
+                {recorrido?.coordenadas?.length > 0 && (
+                  <Polyline
+                    positions={recorrido.coordenadas}
+                    pathOptions={{
+                      color: "#0878bd",
+                      weight: 6,
+                      opacity: 0.9,
+                    }}
+                  />
+                )}
 
               </MapContainer>
 
@@ -935,6 +998,36 @@ function PublicarRuta({ usuario, API_URL }) {
               </div>
 
             </div>
+
+            {cargandoRecorrido && (
+              <p className="info-recorrido">
+                Calculando recorrido por las vías...
+              </p>
+            )}
+
+            {errorRecorrido && (
+              <p className="info-recorrido error">
+                {errorRecorrido}
+              </p>
+            )}
+
+            {recorrido && (
+              <div className="info-recorrido">
+                <div>
+                  <strong>
+                    {recorrido.distancia.toFixed(1)} km
+                  </strong>
+                  <span>Distancia aproximada</span>
+                </div>
+
+                <div>
+                  <strong>
+                    {Math.ceil(recorrido.duracion)} min
+                  </strong>
+                  <span>Duración estimada</span>
+                </div>
+              </div>
+            )}
 
           </section>
 

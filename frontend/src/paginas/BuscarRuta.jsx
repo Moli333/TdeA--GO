@@ -165,7 +165,7 @@ function BuscarRutas({
 
     mapa.current = new mapboxgl.Map({
       container: mapaContenedor.current,
-      style: "mapbox://styles/mapbox/standard-satellite",
+      style: "mapbox://styles/mapbox/streets-v12",
       center: [-75.5636, 6.2518],
       zoom: 11,
     });
@@ -497,9 +497,9 @@ function BuscarRutas({
             {rutasFiltradas.map((ruta) => {
               const cuposDisponibles = Number(
                 ruta.cupos_disponibles ??
-                  ruta.cuposDisponibles ??
-                  ruta.cupos ??
-                  0
+                ruta.cuposDisponibles ??
+                ruta.cupos ??
+                0
               );
 
               const estaSolicitando = solicitandoId === ruta.id;
@@ -581,8 +581,8 @@ function BuscarRutas({
                       {estaSolicitando
                         ? "Procesando..."
                         : cuposDisponibles > 0
-                        ? "Solicitar cupo"
-                        : "Sin cupos disponibles"}
+                          ? "Solicitar cupo"
+                          : "Sin cupos disponibles"}
                     </button>
                   </div>
                 </article>

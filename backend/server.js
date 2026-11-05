@@ -1840,52 +1840,102 @@ app.patch(
 );
 
 
+
 // CONDUCTOR: Consultar solicitudes de cupos para rutas publicadas
-app.get("/api/solicitudes/conductor/:conductor_id", async (req, res) => {
-  try {
-    const { conductor_id } = req.params;
+app.get(
+  "/api/solicitudes/conductor/:conductor_id",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { conductor_id } = req.params;
+      const usuarioAutenticado = req.usuarioAutenticado;
 
-    const { data: misRutas, error: errorRutas } = await dbClient
-      .from("rutas")
-      .select("id")
-      .eq("conductor_id", conductor_id);
+      // Buscar el perfil mediante el ID de autenticación.
+      const { data: perfilId, error: errorPerfilId } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", usuarioAutenticado.id)
+        .maybeSingle();
 
-    if (errorRutas) throw errorRutas;
+      if (errorPerfilId) throw errorPerfilId;
 
-    const rutaIds = (misRutas || []).map((r) => r.id);
+      let perfil = perfilId;
 
-    if (rutaIds.length === 0) {
-      return res.json([]);
+      // Si no coincide el ID, buscar mediante el correo.
+      if (!perfil && usuarioAutenticado.email) {
+        const { data: perfilCorreo, error: errorCorreo } =
+          await dbClient
+            .from("profiles")
+            .select("id, rol")
+            .ilike("correo", usuarioAutenticado.email)
+            .maybeSingle();
+
+        if (errorCorreo) throw errorCorreo;
+
+        perfil = perfilCorreo;
+      }
+
+      // Comprobar que el usuario sea el conductor propietario.
+      if (
+        !perfil ||
+        String(perfil.id) !== String(conductor_id) ||
+        perfil.rol !== "conductor"
+      ) {
+        return res.status(403).json({
+          mensaje: "No tienes autorización para consultar estas solicitudes.",
+        });
+      }
+
+      // Consultar las rutas publicadas por este conductor.
+      const { data: misRutas, error: errorRutas } = await dbClient
+        .from("rutas")
+        .select("id")
+        .eq("conductor_id", perfil.id);
+
+      if (errorRutas) throw errorRutas;
+
+      const rutaIds = (misRutas || []).map((ruta) => ruta.id);
+
+      if (rutaIds.length === 0) {
+        return res.json([]);
+      }
+
+      // Consultar las reservas y los datos de cada pasajero.
+      const { data: solicitudes, error: errorSolicitudes } =
+        await dbClient
+          .from("solicitudes_viaje")
+          .select(`
+            *,
+            pasajero:profiles!solicitudes_viaje_pasajero_id_fkey (
+              id,
+              nombre_completo,
+              correo,
+              telefono,
+              verificado,
+              foto_url
+            ),
+            ruta:rutas!solicitudes_viaje_viaje_id_fkey (
+              origen,
+              destino,
+              fecha,
+              hora
+            )
+          `)
+          .in("viaje_id", rutaIds)
+          .order("fecha_solicitud", { ascending: false });
+
+      if (errorSolicitudes) throw errorSolicitudes;
+
+      return res.json(solicitudes || []);
+    } catch (error) {
+      console.error("Error al obtener solicitudes del conductor:", error);
+
+      return res.status(500).json({
+        mensaje: "Error al obtener solicitudes.",
+      });
     }
-
-    const { data: solicitudes, error: errorSolicitudes } = await dbClient
-      .from("solicitudes_viaje")
-      .select(`
-        *,
-        pasajero:profiles!solicitudes_viaje_pasajero_id_fkey (
-          id,
-          nombre_completo,
-          telefono,
-          foto_url
-        ),
-        ruta:rutas!solicitudes_viaje_viaje_id_fkey (
-          origen,
-          destino,
-          fecha,
-          hora
-        )
-      `)
-      .in("viaje_id", rutaIds)
-      .order("fecha_solicitud", { ascending: false });
-
-    if (errorSolicitudes) throw errorSolicitudes;
-
-    return res.json(solicitudes || []);
-  } catch (error) {
-    console.error("Error al obtener solicitudes del conductor:", error);
-    return res.status(500).json({ mensaje: "Error al obtener solicitudes." });
   }
-});
+);
 
 // ------------------------------------------------------------------
 // NOTIFICACIONES

@@ -5,6 +5,9 @@ import "./MisRutas.css";
 function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000" }) {
   const [rutas, setRutas] = useState([]);
   const [solicitudesNuevas, setSolicitudesNuevas] = useState([]);
+  const [reservas, setReservas] = useState([]);
+  const [cargandoReservas, setCargandoReservas] = useState(true);
+  const [errorReservas, setErrorReservas] = useState("");
   const [cargando, setCargando] = useState(true);
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(true);
   const [error, setError] = useState("");
@@ -92,8 +95,47 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
       }
     };
 
+    const cargarReservas = async () => {
+      try {
+        const token = usuario?.token || usuario?.access_token;
+
+        if (!token) {
+          throw new Error("No se encontró la sesión. Cierra sesión e ingresa nuevamente.");
+        }
+
+        const respuesta = await fetch(
+          `${API_URL}/api/solicitudes/conductor/${encodeURIComponent(usuario.id)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.mensaje || "No fue posible consultar las reservas.");
+        }
+
+        if (!cancelado) {
+          setReservas(Array.isArray(datos) ? datos : datos.solicitudes || []);
+          setErrorReservas("");
+        }
+      } catch (error) {
+        console.error("Error al cargar las reservas de cupos:", error);
+
+        if (!cancelado) {
+          setErrorReservas(error.message || "No fue posible cargar las reservas.");
+        }
+      } finally {
+        if (!cancelado) setCargandoReservas(false);
+      }
+    };
+
     cargarRutas();
     cargarSolicitudesNuevas();
+    cargarReservas();
 
     return () => {
       cancelado = true;
@@ -188,6 +230,149 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             </span>
           </div>
         </div>
+
+        {/* RESERVAS DE CUPOS EN RUTAS PUBLICADAS */}
+        <section className="solicitudes-nuevas-seccion">
+          <div className="solicitudes-nuevas-encabezado">
+            <div>
+              <span className="solicitud-nueva-etiqueta">GESTIÓN DE PASAJEROS</span>
+              <h2>Reservas de cupos</h2>
+              <p>
+                Consulta la información de las personas que solicitan reservar
+                un espacio en tus rutas publicadas.
+              </p>
+            </div>
+
+            <div className="solicitudes-nuevas-contador">
+              {reservas.length}
+              <small>Reservas</small>
+            </div>
+          </div>
+
+          {cargandoReservas && (
+            <div className="solicitudes-nuevas-cargando">
+              Consultando las reservas de tus rutas...
+            </div>
+          )}
+
+          {!cargandoReservas && errorReservas && (
+            <div className="solicitudes-nuevas-error">
+              <p>{errorReservas}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+              >
+                Volver a cargar
+              </button>
+            </div>
+          )}
+
+          {!cargandoReservas && !errorReservas && reservas.length === 0 && (
+            <div className="solicitudes-nuevas-vacio">
+              <div className="solicitud-vacia-ruta">
+                <span></span>
+                <span></span>
+              </div>
+              <strong>Aún no tienes reservas de cupos</strong>
+              <p>
+                Cuando un estudiante solicite reservar un espacio en alguna
+                de tus rutas, encontrarás aquí su información.
+              </p>
+            </div>
+          )}
+
+          {!cargandoReservas && !errorReservas && reservas.length > 0 && (
+            <div className="solicitudes-nuevas-lista">
+              {reservas.map((solicitud, indice) => {
+                const pasajero = solicitud.pasajero || {};
+                const ruta = solicitud.ruta || {};
+
+                return (
+                  <article
+                    className="solicitud-nueva-tarjeta"
+                    key={solicitud.id || indice}
+                  >
+                    <div className="solicitud-nueva-superior">
+                      <span className="solicitud-nueva-etiqueta">
+                        SOLICITUD DE RESERVA
+                      </span>
+
+                      <span className="solicitud-nueva-estado">
+                        <span></span>
+                        {(solicitud.estado || "Pendiente").toString()}
+                      </span>
+                    </div>
+
+                    <div className="solicitud-nueva-recorrido">
+                      <div className="solicitud-nueva-linea">
+                        <span className="solicitud-punto-origen"></span>
+                        <span className="solicitud-linea"></span>
+                        <span className="solicitud-punto-destino"></span>
+                      </div>
+
+                      <div className="solicitud-nueva-ubicaciones">
+                        <div>
+                          <small>ORIGEN</small>
+                          <strong>{ruta.origen || "No disponible"}</strong>
+                        </div>
+                        <div>
+                          <small>DESTINO</small>
+                          <strong>{ruta.destino || "No disponible"}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="solicitud-nueva-pasajero">
+                      <div className="solicitud-pasajero-avatar">
+                        {pasajero.foto_url ? (
+                          <img
+                            src={pasajero.foto_url}
+                            alt={`Foto de ${pasajero.nombre_completo || "pasajero"}`}
+                          />
+                        ) : (
+                          (pasajero.nombre_completo || "P")
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+
+                      <div>
+                        <small>INFORMACIÓN DEL PASAJERO</small>
+                        <strong>
+                          {pasajero.nombre_completo || "Nombre no disponible"}
+                        </strong>
+                        <span>
+                          {pasajero.verificado
+                            ? "Cuenta verificada"
+                            : "Cuenta sin verificar"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="solicitud-nueva-datos">
+                      <div>
+                        <small>CORREO INSTITUCIONAL</small>
+                        <strong>{pasajero.correo || "No disponible"}</strong>
+                      </div>
+
+                      <div>
+                        <small>TELÉFONO</small>
+                        <strong>{pasajero.telefono || "No registrado"}</strong>
+                      </div>
+                    </div>
+
+                    <div className="solicitud-nueva-pie">
+                      Solicitud recibida:{" "}
+                      {solicitud.fecha_solicitud
+                        ? new Date(solicitud.fecha_solicitud).toLocaleString("es-CO")
+                        : "Fecha no disponible"}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* NUEVA SECCIÓN: SOLICITUDES DE VIAJES NUEVOS */}
         <section className="solicitudes-nuevas-seccion">

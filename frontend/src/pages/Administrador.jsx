@@ -1,9 +1,47 @@
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./Administrador.css";
 
 const ADMINISTRADORA_PRINCIPAL_ID =
   "2f1ea263-8be4-48be-99f7-b75e4408265f";
+
+function GraficoBarras({ titulo, descripcion, datos }) {
+  const maximo = Math.max(...datos.map((dato) => dato.valor), 1);
+
+  return (
+    <article className="admin-grafico">
+      <div className="admin-grafico-encabezado">
+        <h3>{titulo}</h3>
+        <p>{descripcion}</p>
+      </div>
+
+      {datos.length === 0 || datos.every((dato) => dato.valor === 0) ? (
+        <div className="admin-grafico-vacio">
+          No hay datos registrados para mostrar.
+        </div>
+      ) : (
+        <div className="admin-barras">
+          {datos.map((dato) => (
+            <div className="admin-barra-fila" key={dato.nombre}>
+              <div className="admin-barra-informacion">
+                <span>{dato.nombre}</span>
+                <strong>{dato.valor}</strong>
+              </div>
+
+              <div className="admin-barra-fondo">
+                <div
+                  className="admin-barra-valor"
+                  style={{
+                    width: `${(dato.valor / maximo) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
 
 function Administrador({ usuario, API_URL, onCerrarSesion, onInicio }) {
   const [seccion, setSeccion] = useState("resumen");
@@ -155,6 +193,53 @@ function Administrador({ usuario, API_URL, onCerrarSesion, onInicio }) {
   const totalSolicitudes =
     solicitudesCupos.length + solicitudesNuevas.length;
 
+  const totalPasajeros = usuarios.filter(
+    (item) => item.rol?.toLowerCase() === "pasajero"
+  ).length;
+
+  const totalConductores = usuarios.filter(
+    (item) => item.rol?.toLowerCase() === "conductor"
+  ).length;
+
+  const totalAdministradores = usuarios.filter(
+    (item) => item.rol?.toLowerCase() === "administrador"
+  ).length;
+
+  const contarEstados = (registros) => {
+    const estados = {};
+
+    registros.forEach((registro) => {
+      const estado = String(registro.estado || "Sin estado")
+        .replaceAll("_", " ")
+        .toLowerCase();
+
+      estados[estado] = (estados[estado] || 0) + 1;
+    });
+
+    return Object.entries(estados).map(([nombre, valor]) => ({
+      nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1),
+      valor,
+    }));
+  };
+
+  const datosUsuarios = [
+    { nombre: "Pasajeros", valor: totalPasajeros },
+    { nombre: "Conductores", valor: totalConductores },
+    { nombre: "Administradores", valor: totalAdministradores },
+  ];
+
+  const datosRutas = contarEstados(rutas);
+
+  const datosSolicitudes = [
+    { nombre: "Solicitudes de cupos", valor: solicitudesCupos.length },
+    { nombre: "Solicitudes de viajes nuevos", valor: solicitudesNuevas.length },
+  ];
+
+  const datosEstadosSolicitudes = contarEstados([
+    ...solicitudesCupos,
+    ...solicitudesNuevas,
+  ]);
+
   const formatearFecha = (valor) => {
     if (!valor) return "Sin fecha";
 
@@ -282,47 +367,93 @@ function Administrador({ usuario, API_URL, onCerrarSesion, onInicio }) {
             <div className="admin-seccion-titulo">
               <div>
                 <h2>Resumen del sistema</h2>
-                <p>Indicadores de los registros disponibles en la plataforma.</p>
+                <p>
+                  Indicadores generales y estadísticas de la comunidad TdeA GO.
+                </p>
               </div>
             </div>
 
             <div className="admin-tarjetas">
               <article className="admin-tarjeta">
-                <span>Usuarios registrados</span>
-                <strong>{usuarios.length}</strong>
-                <small>Total de perfiles registrados</small>
+                <span className="admin-tarjeta-icono">US</span>
+                <div className="admin-tarjeta-contenido">
+                  <span>Usuarios registrados</span>
+                  <strong>{usuarios.length}</strong>
+                  <small>Total de perfiles registrados</small>
+                </div>
               </article>
 
               <article className="admin-tarjeta">
-                <span>Conductores</span>
-                <strong>
-                  {usuarios.filter(
-                    (item) => item.rol?.toLowerCase() === "conductor"
-                  ).length}
-                </strong>
-                <small>Usuarios con rol conductor</small>
+                <span className="admin-tarjeta-icono">CO</span>
+                <div className="admin-tarjeta-contenido">
+                  <span>Conductores</span>
+                  <strong>{totalConductores}</strong>
+                  <small>Usuarios con rol conductor</small>
+                </div>
               </article>
 
               <article className="admin-tarjeta">
-                <span>Rutas registradas</span>
-                <strong>{rutas.length}</strong>
-                <small>Total de rutas consultadas</small>
+                <span className="admin-tarjeta-icono">RU</span>
+                <div className="admin-tarjeta-contenido">
+                  <span>Rutas registradas</span>
+                  <strong>{rutas.length}</strong>
+                  <small>Total de rutas consultadas</small>
+                </div>
               </article>
 
               <article className="admin-tarjeta">
-                <span>Solicitudes registradas</span>
-                <strong>{totalSolicitudes}</strong>
-                <small>Solicitudes de ambos tipos</small>
+                <span className="admin-tarjeta-icono">SO</span>
+                <div className="admin-tarjeta-contenido">
+                  <span>Solicitudes registradas</span>
+                  <strong>{totalSolicitudes}</strong>
+                  <small>Solicitudes de ambos tipos</small>
+                </div>
               </article>
+            </div>
+
+            <div className="admin-dashboard">
+              <div className="admin-dashboard-titulo">
+                <h2>Estadísticas de la plataforma</h2>
+                <p>
+                  Distribución de los registros consultados en la base de datos.
+                </p>
+              </div>
+
+              <div className="admin-dashboard-graficos">
+                <GraficoBarras
+                  titulo="Usuarios por rol"
+                  descripcion="Distribución de los perfiles registrados."
+                  datos={datosUsuarios}
+                />
+
+                <GraficoBarras
+                  titulo="Rutas por estado"
+                  descripcion="Cantidad de rutas según su estado actual."
+                  datos={datosRutas}
+                />
+
+                <GraficoBarras
+                  titulo="Solicitudes por tipo"
+                  descripcion="Comparación de las solicitudes registradas."
+                  datos={datosSolicitudes}
+                />
+
+                <GraficoBarras
+                  titulo="Estado de las solicitudes"
+                  descripcion="Distribución de las solicitudes de ambos tipos."
+                  datos={datosEstadosSolicitudes}
+                />
+              </div>
             </div>
 
             <div className="admin-panel-informativo">
               <div>
                 <strong>Información general</strong>
                 <p>
-                  Los indicadores se calculan a partir de los registros
-                  consultados en la base de datos. Utiliza el botón de
-                  actualización para consultar los datos más recientes.
+                  Las estadísticas se calculan a partir de los usuarios,
+                  rutas y solicitudes consultados en la base de datos.
+                  Utiliza el botón de actualización para obtener los
+                  registros más recientes.
                 </p>
               </div>
             </div>

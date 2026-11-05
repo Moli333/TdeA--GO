@@ -1,23 +1,24 @@
-
 /* ==========================================
    TdeA GO - PANEL DE ADMINISTRACIÓN
-   Diseño independiente y responsive
+   Diseño profesional y responsive
 ========================================== */
 
 .pagina-administrador {
   --admin-azul: #174b83;
   --admin-azul-oscuro: #10365f;
+  --admin-azul-claro: #edf5fd;
   --admin-verde: #239b68;
   --admin-fondo: #f3f6fa;
   --admin-texto: #253449;
   --admin-gris: #718096;
+  --admin-borde: #e5eaf0;
 
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--admin-fondo);
   color: var(--admin-texto);
   font-family: inherit;
-  display: flex;
-  flex-direction: column;
 }
 
 .pagina-administrador * {
@@ -28,14 +29,15 @@
 
 .pagina-administrador .admin-encabezado {
   background: #fff;
-  border-bottom: 1px solid #e5eaf0;
-  box-shadow: 0 2px 10px rgba(20, 45, 75, .05);
+  border-bottom: 1px solid var(--admin-borde);
+  box-shadow: 0 3px 12px rgba(20, 45, 75, .04);
 }
 
 .pagina-administrador .admin-encabezado-contenedor {
-  max-width: 1400px;
-  min-height: 78px;
-  padding: 12px 35px;
+  width: 100%;
+  max-width: 1450px;
+  min-height: 80px;
+  padding: 14px 35px;
   margin: auto;
   display: flex;
   align-items: center;
@@ -54,15 +56,15 @@
 }
 
 .pagina-administrador .admin-logo-icono {
-  font-size: 32px;
+  font-size: 30px;
 }
 
 .pagina-administrador .admin-logo-texto {
   display: flex;
   align-items: center;
+  gap: 3px;
   font-size: 23px;
   font-weight: 800;
-  gap: 3px;
 }
 
 .pagina-administrador .admin-logo-texto span {
@@ -70,9 +72,9 @@
 }
 
 .pagina-administrador .admin-titulo {
-  font-size: 15px;
-  font-weight: 700;
   color: var(--admin-azul);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .pagina-administrador .admin-usuario {
@@ -82,21 +84,21 @@
 }
 
 .pagina-administrador .admin-avatar {
-  width: 43px;
-  height: 43px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #e4eef9;
+  background: var(--admin-azul-claro);
   color: var(--admin-azul);
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .pagina-administrador .admin-datos-usuario {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .pagina-administrador .admin-datos-usuario strong {
@@ -110,59 +112,82 @@
 }
 
 .pagina-administrador .admin-cerrar-sesion {
-  border: 1px solid #e0e6ed;
+  border: 1px solid var(--admin-borde);
   background: white;
   color: #596579;
   padding: 10px 15px;
   border-radius: 9px;
   font-weight: 600;
   cursor: pointer;
+  transition: .2s ease;
 }
 
 .pagina-administrador .admin-cerrar-sesion:hover {
   background: #fff1f1;
   color: #c03939;
+  border-color: #f0cccc;
 }
 
-/* CONTENIDO */
+/* CONTENIDO PRINCIPAL */
 
 .pagina-administrador .admin-contenido {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1450px;
   margin: 0 auto;
   padding: 35px;
   flex: 1;
 }
 
+/* BIENVENIDA */
+
 .pagina-administrador .admin-bienvenida {
-  background: linear-gradient(115deg, #174b83, #246da9);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(115deg, #10365f, #174b83 65%, #2677ad);
   color: white;
-  padding: 36px 40px;
+  padding: 38px 42px;
   border-radius: 17px;
-  margin-bottom: 25px;
-  box-shadow: 0 8px 22px rgba(23, 75, 131, .15);
+  margin-bottom: 27px;
+  box-shadow: 0 9px 25px rgba(23, 75, 131, .15);
+}
+
+.pagina-administrador .admin-bienvenida::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  right: -75px;
+  top: -110px;
+  border: 35px solid rgba(255, 255, 255, .07);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .pagina-administrador .admin-etiqueta {
   display: inline-block;
   color: #c9e8ff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 2px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .pagina-administrador .admin-bienvenida h1 {
+  position: relative;
+  z-index: 1;
   color: white;
   font-size: 29px;
-  margin: 0 0 10px;
+  margin: 0 0 11px;
 }
 
 .pagina-administrador .admin-bienvenida p {
+  position: relative;
+  z-index: 1;
   color: #e5f1fc;
   margin: 0;
-  line-height: 1.6;
-  font-size: 15px;
+  line-height: 1.7;
+  font-size: 14px;
+  max-width: 700px;
 }
 
 /* NAVEGACIÓN */
@@ -171,36 +196,38 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 15px;
-  margin-bottom: 25px;
+  margin-bottom: 27px;
 }
 
 .pagina-administrador .admin-menu-boton {
-  min-height: 85px;
-  padding: 16px;
-  border: 1px solid #e5eaf0;
-  border-radius: 12px;
+  min-height: 86px;
+  padding: 17px;
+  border: 1px solid var(--admin-borde);
+  border-radius: 13px;
   background: white;
   display: flex;
   align-items: center;
   gap: 13px;
   text-align: left;
   cursor: pointer;
-  transition: .2s ease;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
   color: var(--admin-texto);
 }
 
 .pagina-administrador .admin-menu-boton:hover {
   border-color: #9bbddd;
   transform: translateY(-2px);
+  box-shadow: 0 5px 14px rgba(23, 75, 131, .07);
 }
 
 .pagina-administrador .admin-menu-boton.seleccionado {
   border: 2px solid var(--admin-azul);
   background: #edf5fd;
+  box-shadow: 0 4px 13px rgba(23, 75, 131, .08);
 }
 
 .pagina-administrador .admin-menu-icono {
-  font-size: 27px;
+  font-size: 25px;
 }
 
 .pagina-administrador .admin-menu-boton > span:last-child {
@@ -210,7 +237,7 @@
 }
 
 .pagina-administrador .admin-menu-boton strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .pagina-administrador .admin-menu-boton small {
@@ -222,10 +249,10 @@
 
 .pagina-administrador .admin-seccion {
   background: white;
-  padding: 27px;
-  border: 1px solid #e8edf2;
-  border-radius: 14px;
-  box-shadow: 0 3px 12px rgba(30, 50, 80, .04);
+  padding: 29px;
+  border: 1px solid var(--admin-borde);
+  border-radius: 15px;
+  box-shadow: 0 4px 16px rgba(30, 50, 80, .035);
   margin-bottom: 25px;
   min-width: 0;
 }
@@ -235,7 +262,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 15px;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 .pagina-administrador .admin-seccion-titulo h2 {
@@ -248,9 +275,10 @@
   font-size: 13px;
   color: var(--admin-gris);
   margin: 0;
+  line-height: 1.5;
 }
 
-/* TARJETAS */
+/* TARJETAS DE INDICADORES */
 
 .pagina-administrador .admin-tarjetas {
   display: grid;
@@ -260,46 +288,174 @@
 }
 
 .pagina-administrador .admin-tarjeta {
-  border: 1px solid #e8edf2;
-  border-radius: 13px;
+  min-width: 0;
+  min-height: 140px;
+  border: 1px solid var(--admin-borde);
+  border-radius: 14px;
   padding: 20px;
   background: #fff;
   display: grid;
-  grid-template-columns: 48px 1fr;
+  grid-template-columns: 46px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.pagina-administrador .admin-tarjeta:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 7px 20px rgba(30, 50, 80, .07);
 }
 
 .pagina-administrador .admin-tarjeta-icono {
   width: 46px;
   height: 46px;
-  background: #edf5fd;
+  background: var(--admin-azul-claro);
+  color: var(--admin-azul);
   border-radius: 12px;
   display: grid;
   place-items: center;
-  font-size: 23px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.pagina-administrador .admin-tarjeta > div {
+.pagina-administrador .admin-tarjeta-contenido {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.pagina-administrador .admin-tarjeta > div span {
+.pagina-administrador .admin-tarjeta-contenido span {
   color: var(--admin-gris);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pagina-administrador .admin-tarjeta-contenido strong {
+  color: var(--admin-azul);
+  font-size: 29px;
+  line-height: 1.1;
+}
+
+.pagina-administrador .admin-tarjeta-contenido small {
+  color: var(--admin-gris);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* DASHBOARD DE ESTADÍSTICAS */
+
+.pagina-administrador .admin-dashboard {
+  margin-top: 37px;
+}
+
+.pagina-administrador .admin-dashboard-titulo {
+  margin-bottom: 21px;
+}
+
+.pagina-administrador .admin-dashboard-titulo h2 {
+  color: var(--admin-azul-oscuro);
+  font-size: 20px;
+  margin: 0 0 7px;
+}
+
+.pagina-administrador .admin-dashboard-titulo p {
+  color: var(--admin-gris);
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pagina-administrador .admin-dashboard-graficos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.pagina-administrador .admin-grafico {
+  min-width: 0;
+  min-height: 220px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--admin-borde);
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(30, 50, 80, .035);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+
+.pagina-administrador .admin-grafico:hover {
+  box-shadow: 0 7px 20px rgba(30, 50, 80, .07);
+  transform: translateY(-2px);
+}
+
+.pagina-administrador .admin-grafico-encabezado h3 {
+  color: var(--admin-azul-oscuro);
+  font-size: 15px;
+  margin: 0 0 7px;
+}
+
+.pagina-administrador .admin-grafico-encabezado p {
+  color: var(--admin-gris);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 25px;
+}
+
+.pagina-administrador .admin-barras {
+  display: flex;
+  flex-direction: column;
+  gap: 21px;
+}
+
+.pagina-administrador .admin-barra-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pagina-administrador .admin-barra-informacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   font-size: 12px;
 }
 
-.pagina-administrador .admin-tarjeta > div strong {
-  color: var(--admin-azul);
-  font-size: 25px;
+.pagina-administrador .admin-barra-informacion span {
+  color: var(--admin-texto);
+  font-weight: 600;
 }
 
-.pagina-administrador .admin-tarjeta > small {
-  grid-column: 1 / -1;
+.pagina-administrador .admin-barra-informacion strong {
+  color: var(--admin-azul);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.pagina-administrador .admin-barra-fondo {
+  height: 10px;
+  width: 100%;
+  background: #edf1f6;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.pagina-administrador .admin-barra-valor {
+  height: 100%;
+  min-width: 0;
+  background: linear-gradient(90deg, var(--admin-azul), var(--admin-verde));
+  border-radius: 20px;
+  transition: width .5s ease;
+}
+
+.pagina-administrador .admin-grafico-vacio {
+  padding: 25px 12px;
+  text-align: center;
   color: var(--admin-gris);
-  font-size: 11px;
+  background: #f7f9fc;
+  border-radius: 9px;
+  font-size: 13px;
 }
 
 /* INFORMACIÓN */
@@ -309,14 +465,10 @@
   align-items: flex-start;
   gap: 15px;
   padding: 20px;
-  margin-top: 25px;
+  margin-top: 27px;
   background: #edf5fd;
   border: 1px solid #d8e8f7;
   border-radius: 11px;
-}
-
-.pagina-administrador .admin-panel-informativo > span {
-  font-size: 23px;
 }
 
 .pagina-administrador .admin-panel-informativo strong {
@@ -327,7 +479,7 @@
 .pagina-administrador .admin-panel-informativo p {
   color: #596b80;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
   margin: 7px 0 0;
 }
 
@@ -346,6 +498,12 @@
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
+  transition: background .2s ease;
+}
+
+.pagina-administrador .admin-seccion-titulo button:hover,
+.pagina-administrador .admin-seccion tbody button:hover {
+  background: var(--admin-azul-oscuro);
 }
 
 .pagina-administrador .admin-seccion button:disabled {
@@ -369,7 +527,7 @@
   box-shadow: 0 0 0 3px rgba(23, 75, 131, .1);
 }
 
-/* TABLA DE USUARIOS */
+/* TABLAS */
 
 .pagina-administrador .admin-seccion table {
   width: 100%;
@@ -383,6 +541,7 @@
   background: #edf3f9;
   color: var(--admin-azul-oscuro);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .pagina-administrador .admin-seccion td,
@@ -390,6 +549,10 @@
   padding: 14px 12px !important;
   border-bottom: 1px solid #e8edf2;
   text-align: left;
+}
+
+.pagina-administrador .admin-seccion tbody tr {
+  transition: background .15s ease;
 }
 
 .pagina-administrador .admin-seccion tbody tr:hover {
@@ -405,10 +568,6 @@
   color: var(--admin-gris);
 }
 
-.pagina-administrador .admin-contenido-vacio > span {
-  font-size: 32px;
-}
-
 .pagina-administrador .admin-contenido-vacio h3 {
   color: var(--admin-azul);
   margin: 10px 0;
@@ -420,7 +579,7 @@
   width: 100%;
   padding: 22px 35px;
   background: white;
-  border-top: 1px solid #e5eaf0;
+  border-top: 1px solid var(--admin-borde);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -452,19 +611,21 @@
   padding: 10px;
 }
 
-/* RESPONSIVE */
+/* RESPONSIVE: TABLETAS */
 
-@media (max-width: 900px) {
-  .pagina-administrador .admin-menu {
+@media (max-width: 1050px) {
+  .pagina-administrador .admin-tarjetas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .pagina-administrador .admin-tarjetas {
+  .pagina-administrador .admin-menu {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 600px) {
+/* RESPONSIVE: CELULARES */
+
+@media (max-width: 650px) {
   .pagina-administrador .admin-encabezado-contenedor {
     padding: 13px 16px;
     flex-wrap: wrap;
@@ -497,7 +658,7 @@
   }
 
   .pagina-administrador .admin-bienvenida {
-    padding: 25px 20px;
+    padding: 27px 20px;
   }
 
   .pagina-administrador .admin-bienvenida h1 {
@@ -515,7 +676,7 @@
   }
 
   .pagina-administrador .admin-menu-icono {
-    font-size: 21px;
+    font-size: 20px;
   }
 
   .pagina-administrador .admin-menu-boton strong {
@@ -527,7 +688,7 @@
   }
 
   .pagina-administrador .admin-seccion {
-    padding: 17px 13px;
+    padding: 19px 14px;
   }
 
   .pagina-administrador .admin-seccion-titulo {
@@ -536,28 +697,54 @@
   }
 
   .pagina-administrador .admin-tarjetas {
-    gap: 9px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .pagina-administrador .admin-tarjeta {
+    min-height: 125px;
     padding: 12px;
-    grid-template-columns: 36px 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .pagina-administrador .admin-tarjeta-icono {
     width: 35px;
     height: 35px;
-    font-size: 18px;
+    font-size: 11px;
   }
 
-  .pagina-administrador .admin-tarjeta > div strong {
-    font-size: 21px;
+  .pagina-administrador .admin-tarjeta-contenido {
+    gap: 6px;
+  }
+
+  .pagina-administrador .admin-tarjeta-contenido strong {
+    font-size: 24px;
+  }
+
+  .pagina-administrador .admin-dashboard-graficos {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
+  .pagina-administrador .admin-grafico {
+    min-height: 190px;
+    padding: 18px;
   }
 
   .pagina-administrador .admin-footer {
     padding: 18px 14px;
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 360px) {
+  .pagina-administrador .admin-tarjetas {
+    grid-template-columns: 1fr;
+  }
+
+  .pagina-administrador .admin-menu {
+    grid-template-columns: 1fr;
   }
 }

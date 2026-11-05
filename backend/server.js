@@ -627,8 +627,8 @@ app.put(
         });
       }
 
-      // Consultar el perfil actual antes de permitir el cambio.
-      const { data: perfil, error: errorPerfil } = await dbClient
+      // Consultar el perfil por el ID de Supabase Auth.
+      let { data: perfil, error: errorPerfil } = await dbClient
         .from("profiles")
         .select("id, rol")
         .eq("id", idAutenticado)
@@ -640,6 +640,27 @@ app.put(
         return res.status(500).json({
           mensaje: "No fue posible verificar tu perfil.",
         });
+      }
+
+      // Si no coincide el ID, buscar el perfil por el correo
+      // de la cuenta autenticada.
+      if (!perfil && req.usuarioAutenticado.email) {
+        const { data: perfilCorreo, error: errorCorreo } =
+          await dbClient
+            .from("profiles")
+            .select("id, rol")
+            .ilike("correo", req.usuarioAutenticado.email)
+            .maybeSingle();
+
+        if (errorCorreo) {
+          console.error("Error buscando perfil por correo:", errorCorreo);
+
+          return res.status(500).json({
+            mensaje: "No fue posible verificar tu perfil.",
+          });
+        }
+
+        perfil = perfilCorreo;
       }
 
       if (!perfil) {
@@ -694,7 +715,7 @@ app.put(
       const { data, error } = await dbClient
         .from("profiles")
         .update({ rol })
-        .eq("id", idAutenticado)
+        .eq("id", perfil.id)
         .select()
         .single();
 

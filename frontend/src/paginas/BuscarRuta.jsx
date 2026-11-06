@@ -5,6 +5,120 @@ import "../BuscarRutas.css";
 
 const TOKEN_MAPBOX = import.meta.env.VITE_MAPBOX_TOKEN;
 
+function MiniMapaTarjeta({ ruta }) {
+  const contenedorRef = useRef(null);
+
+  useEffect(() => {
+    const latOrigen = Number(ruta.lat_origen);
+    const lngOrigen = Number(ruta.lng_origen);
+    const latDestino = Number(ruta.lat_destino);
+    const lngDestino = Number(ruta.lng_destino);
+
+    const coordenadasValidas = [
+      latOrigen,
+      lngOrigen,
+      latDestino,
+      lngDestino,
+    ].every(Number.isFinite);
+
+    if (
+      !contenedorRef.current ||
+      !TOKEN_MAPBOX ||
+      !coordenadasValidas
+    ) {
+      return;
+    }
+
+    const mapaMiniatura = new mapboxgl.Map({
+      container: contenedorRef.current,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [lngOrigen, latOrigen],
+      zoom: 11,
+      interactive: false,
+      attributionControl: false,
+    });
+
+    mapaMiniatura.on("load", async () => {
+      try {
+        const coordenadas = `${lngOrigen},${latOrigen};${lngDestino},${latDestino}`;
+
+        const respuesta = await fetch(
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${coordenadas}?geometries=geojson&overview=full&access_token=${TOKEN_MAPBOX}`
+        );
+
+        if (!respuesta.ok) return;
+
+        const datos = await respuesta.json();
+        const recorrido = datos.routes?.[0]?.geometry;
+
+        if (!recorrido || !mapaMiniatura.getStyle()) return;
+
+        mapaMiniatura.addSource("recorrido-miniatura", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: recorrido,
+            properties: {},
+          },
+        });
+
+        mapaMiniatura.addLayer({
+          id: "linea-recorrido-miniatura",
+          type: "line",
+          source: "recorrido-miniatura",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#2563eb",
+            "line-width": 4,
+          },
+        });
+
+        const limites = new mapboxgl.LngLatBounds();
+
+        recorrido.coordinates.forEach((punto) => {
+          limites.extend(punto);
+        });
+
+        mapaMiniatura.fitBounds(limites, {
+          padding: 35,
+          maxZoom: 14,
+        });
+      } catch (error) {
+        console.error("Error al cargar el mini mapa:", error);
+      }
+    });
+
+    return () => {
+      mapaMiniatura.remove();
+    };
+  }, [
+    ruta.lat_origen,
+    ruta.lng_origen,
+    ruta.lat_destino,
+    ruta.lng_destino,
+  ]);
+
+  const tieneCoordenadas = [
+    ruta.lat_origen,
+    ruta.lng_origen,
+    ruta.lat_destino,
+    ruta.lng_destino,
+  ].every((valor) => valor !== null && valor !== undefined && valor !== "");
+
+  if (!tieneCoordenadas || !TOKEN_MAPBOX) {
+    return (
+      <div className="mini-mapa-sin-datos">
+        Mapa no disponible para este recorrido.
+      </div>
+    );
+  }
+
+  return <div ref={contenedorRef} className="mini-mapa-tarjeta" />;
+}
+
 function BuscarRutas({
   rutasIniciales = [],
   API_URL = "http://localhost:5000",
@@ -34,7 +148,13 @@ function BuscarRutas({
         setCargandoRutas(true);
         setErrorRutas("");
 
-        const respuesta = await fetch(`${API_URL}/api/rutas`);
+        const token = usuario?.token || usuario?.access_token;
+
+        const respuesta = await fetch(`${API_URL}/api/rutas`, {
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {}
+        });
 
         if (!respuesta.ok) {
           throw new Error("No fue posible consultar las rutas.");
@@ -55,8 +175,7 @@ function BuscarRutas({
     };
 
     cargarRutas();
-  }, [API_URL]);
-
+  }, [API_URL, usuario?.token, usuario?.access_token]);
   useEffect(() => {
     const cargarSolicitudesPasajero = async () => {
       const idPasajero = usuario?.id || usuario?.id_usuario;
@@ -531,7 +650,11 @@ function BuscarRutas({
           </div>
         ) : (
           <div className="lista-rutas">
+
             {rutasFiltradas.map((ruta) => {
+              const idRuta = ruta.id || ruta.id_ruta;
+
+              const cuposTotales = Number(ruta.cupos_totales || 0);
               const cuposDisponibles = Number(
                 ruta.cupos_disponibles ??
                 ruta.cuposDisponibles ??
@@ -539,20 +662,44 @@ function BuscarRutas({
                 0
               );
 
-              const estaSolicitando = solicitandoId === ruta.id;
+              const reservas = ruta.reservas_aceptadas || [];
+              const cuposOcupados = Number(
+                ruta.cupos_ocupados ?? reservas.length
+              );
+
+              const conductor = ruta.conductor || {};
+              const vehiculo = ruta.vehiculo || {};
+
+              const estaSolicitando = String(solicitandoId) === String(idRuta);
+
+              const tarifaPorCupo = Number(
+                ruta.tarifa_sugerida ||
+                ruta.tarifa_contribucion ||
+                0
+              );
+
+              const formatoPesos = (valor) =>
+                Number(valor || 0).toLocaleString("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  maximumFractionDigits: 0,
+                });
 
               return (
-                <article
-                  className="tarjeta-ruta"
-                  key={ruta.id || ruta.id_ruta}
-                >
+                <article className="tarjeta-ruta" key={idRuta}>
+                  <div className="tarjeta-ruta-encabezado">
+                    <span>RUTA DISPONIBLE</span>
+                    <span className="estado-ruta-disponible">
+                      {cuposDisponibles > 0 ? "Disponible" : "Completa"}
+                    </span>
+                  </div>
+
                   <div className="ruta-principal">
                     <div className="ruta-lugar">
                       <span className="ruta-punto origen"></span>
-
                       <div>
                         <small>Origen</small>
-                        <strong>{ruta.origen}</strong>
+                        <strong>{ruta.origen || "No especificado"}</strong>
                       </div>
                     </div>
 
@@ -560,10 +707,9 @@ function BuscarRutas({
 
                     <div className="ruta-lugar">
                       <span className="ruta-punto destino"></span>
-
                       <div>
                         <small>Destino</small>
-                        <strong>{ruta.destino}</strong>
+                        <strong>{ruta.destino || "No especificado"}</strong>
                       </div>
                     </div>
                   </div>
@@ -571,60 +717,203 @@ function BuscarRutas({
                   <div className="ruta-informacion">
                     <div>
                       <span>Fecha</span>
-                      <strong>
-                        {ruta.fecha || "No especificada"}
-                      </strong>
+                      <strong>{ruta.fecha || "No especificada"}</strong>
                     </div>
-
                     <div>
                       <span>Hora</span>
+                      <strong>{ruta.hora || "No especificada"}</strong>
+                    </div>
+                    <div>
+                      <span>Distancia</span>
                       <strong>
-                        {ruta.hora || "No especificada"}
+                        {ruta.distancia_km
+                          ? `${Number(ruta.distancia_km).toFixed(1)} km`
+                          : "No disponible"}
                       </strong>
                     </div>
-
                     <div>
-                      <span>Cupos disponibles</span>
-                      <strong>{cuposDisponibles}</strong>
+                      <span>Duración estimada</span>
+                      <strong>
+                        {ruta.duracion_minutos
+                          ? `${Math.round(Number(ruta.duracion_minutos))} min`
+                          : "No disponible"}
+                      </strong>
                     </div>
                   </div>
 
-                  {(ruta.conductor?.nombre_completo || ruta.conductor_nombre) && (
-                    <div className="ruta-conductor">
-                      <div className="conductor-avatar">
-                        {String(
-                          ruta.conductor?.nombre_completo || ruta.conductor_nombre
-                        )
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
+                  <div className="tarjeta-seccion">
+                    <h3>Mapa del recorrido</h3>
+                    <MiniMapaTarjeta ruta={ruta} />
+                  </div>
 
-                      <div>
-                        <span>Conductor</span>
+                  <div className="tarjeta-seccion">
+                    <h3>Información del conductor</h3>
+
+                    <div className="tarjeta-conductor">
+                      {conductor.foto_url ? (
+                        <img
+                          src={conductor.foto_url}
+                          alt={`Foto de ${conductor.nombre_completo || "conductor"}`}
+                          className="avatar-ruta"
+                        />
+                      ) : (
+                        <div className="avatar-ruta avatar-inicial">
+                          {(conductor.nombre_completo || "C").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div className="datos-conductor">
                         <strong>
-                          {ruta.conductor?.nombre_completo || ruta.conductor_nombre}
+                          {conductor.nombre_completo || "Conductor"}
                         </strong>
+                        <span>
+                          {conductor.verificado ? "Usuario verificado" : "Verificación pendiente"}
+                        </span>
+                        {conductor.telefono && (
+                          <span>
+                            Teléfono: {conductor.telefono}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  <div className="ruta-acciones">
-                    <button
-                      type="button"
-                      className="boton-solicitar"
-                      disabled={cuposDisponibles <= 0 || estaSolicitando}
-                      onClick={() => manejarSolicitud(ruta)}
-                    >
-                      {estaSolicitando
-                        ? "Procesando..."
-                        : cuposDisponibles > 0
-                          ? "Solicitar cupo"
-                          : "Sin cupos disponibles"}
-                    </button>
+                  <div className="tarjeta-seccion">
+                    <h3>Vehículo</h3>
+
+                    <div className="datos-vehiculo">
+                      <div>
+                        <span>Tipo</span>
+                        <strong>{vehiculo.tipo || "No disponible"}</strong>
+                      </div>
+                      <div>
+                        <span>Marca y modelo</span>
+                        <strong>{vehiculo.marca_modelo || "No disponible"}</strong>
+                      </div>
+                      <div>
+                        <span>Placa</span>
+                        <strong>{vehiculo.placa || "No disponible"}</strong>
+                      </div>
+                      <div>
+                        <span>Color</span>
+                        <strong>{vehiculo.color || "No disponible"}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="tarjeta-seccion">
+                    <h3>Distribución de cupos</h3>
+
+                    <div className="resumen-cupos">
+                      <span>{cuposOcupados} ocupados</span>
+                      <span>{cuposDisponibles} disponibles</span>
+                      <span>{cuposTotales} en total</span>
+                    </div>
+
+                    <div className="barra-cupos">
+                      <div
+                        className="barra-cupos-ocupados"
+                        style={{
+                          width: `${cuposTotales > 0
+                            ? Math.min((cuposOcupados / cuposTotales) * 100, 100)
+                            : 0
+                            }%`,
+                        }}
+                      />
+                    </div>
+
+                    <div className="lista-cupos">
+                      {Array.from({ length: cuposTotales }, (_, indice) => {
+                        const reserva = reservas[indice] || null;
+                        const cupoOcupado = indice < cuposOcupados;
+
+                        return (
+                          <div
+                            className={`fila-cupo ${cupoOcupado ? "cupo-ocupado" : "cupo-libre"}`}
+                            key={`${idRuta}-cupo-${indice + 1}`}
+                          >
+                            {cupoOcupado ? (
+                              <>
+                                {reserva ? (
+                                  <>
+                                    <div className="pasajero-cupo">
+                                      {reserva.pasajero?.foto_url ? (
+                                        <img
+                                          src={reserva.pasajero.foto_url}
+                                          alt=""
+                                          className="avatar-pasajero-cupo"
+                                        />
+                                      ) : (
+                                        <div className="avatar-pasajero-cupo avatar-inicial">
+                                          {(reserva.pasajero?.nombre_completo || "P")
+                                            .charAt(0)
+                                            .toUpperCase()}
+                                        </div>
+                                      )}
+
+                                      <div>
+                                        <strong>
+                                          {reserva.pasajero?.nombre_completo || "Cupo ocupado"}
+                                        </strong>
+                                        <span>Cupo {indice + 1} · Ocupado</span>
+                                      </div>
+                                    </div>
+
+                                    <strong className="tarifa-cupo-ocupado">
+                                      {formatoPesos(
+                                        reserva.tarifa_acordada ||
+                                        reserva.tarifa_sugerida ||
+                                        tarifaPorCupo
+                                      )}
+                                    </strong>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div>
+                                      <strong>Cupo {indice + 1}</strong>
+                                      <span>Ocupado</span>
+                                    </div>
+                                    <strong className="tarifa-cupo-ocupado">
+                                      {formatoPesos(tarifaPorCupo)}
+                                    </strong>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div>
+                                  <strong>Cupo {indice + 1}</strong>
+                                  <span>Disponible</span>
+                                </div>
+                                <strong className="tarifa-cupo-disponible">
+                                  {formatoPesos(tarifaPorCupo)}
+                                </strong>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="ruta-acciones">
+                      <button
+                        type="button"
+                        className="boton-solicitar"
+                        disabled={cuposDisponibles <= 0 || estaSolicitando}
+                        onClick={() => manejarSolicitud(ruta)}
+                      >
+                        {estaSolicitando
+                          ? "Procesando..."
+                          : cuposDisponibles > 0
+                            ? "Solicitar cupo"
+                            : "Sin cupos disponibles"}
+                      </button>
+                    </div>
                   </div>
                 </article>
               );
             })}
+
           </div>
         )}
       </div>

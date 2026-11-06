@@ -9,12 +9,10 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   const [cargandoReservas, setCargandoReservas] = useState(true);
   const [errorReservas, setErrorReservas] = useState("");
   const [procesandoSolicitud, setProcesandoSolicitud] = useState(null);
-  const [procesandoSolicitud, setProcesandoSolicitud] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(true);
   const [error, setError] = useState("");
   const [errorSolicitudes, setErrorSolicitudes] = useState("");
-
 
   useEffect(() => {
     if (!usuario?.id) return;
@@ -187,6 +185,34 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   const obtenerCuposDisponibles = (ruta) =>
     Number(ruta.cupos_disponibles ?? ruta.cuposDisponibles ?? 0);
 
+  const obtenerIdRutaSolicitud = (solicitud) =>
+    solicitud.viaje_id ??
+    solicitud.ruta_id ??
+    solicitud.ruta?.id ??
+    solicitud.ruta?.id_ruta;
+
+  const normalizarEstadoSolicitud = (estado) =>
+    String(estado || "").trim().toLowerCase();
+
+  const esReservaAceptada = (solicitud) =>
+    ["aceptada", "aceptado", "aprobada", "aprobado"].includes(
+      normalizarEstadoSolicitud(solicitud.estado)
+    );
+
+  const obtenerTextoEstadoSolicitud = (estado) => {
+    const valor = normalizarEstadoSolicitud(estado);
+
+    if (["aceptada", "aceptado", "aprobada", "aprobado"].includes(valor)) {
+      return "Aprobada";
+    }
+
+    if (["rechazada", "rechazado"].includes(valor)) {
+      return "Rechazada";
+    }
+
+    return "Pendiente";
+  };
+
   const obtenerEstado = (ruta) => {
     const fecha = ruta.fecha_hora_salida || ruta.fechaHoraSalida || ruta.fecha_salida;
 
@@ -237,6 +263,25 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             : item
         )
       );
+
+      // Actualizar los cupos disponibles de la ruta
+      if (accion === "aceptar") {
+        const idRuta = obtenerIdRutaSolicitud(solicitud);
+        const cuposActualizados = Number(datos.resultado?.cupos_disponibles);
+
+        if (idRuta && Number.isFinite(cuposActualizados)) {
+          setRutas((anteriores) =>
+            anteriores.map((ruta) =>
+              String(ruta.id ?? ruta.id_ruta) === String(idRuta)
+                ? {
+                  ...ruta,
+                  cupos_disponibles: cuposActualizados,
+                }
+                : ruta
+            )
+          );
+        }
+      }
 
       // Si se acepta, actualizar los cupos disponibles de la ruta
       if (accion === "aceptar") {
@@ -363,7 +408,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
 
                       <span className="solicitud-nueva-estado">
                         <span></span>
-                        {(solicitud.estado || "Pendiente").toString()}
+                        {obtenerTextoEstadoSolicitud(solicitud.estado)}
                       </span>
                     </div>
 
@@ -642,10 +687,19 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
               const estado = obtenerEstado(ruta);
               const cuposTotales = obtenerCuposTotales(ruta);
               const cuposDisponibles = obtenerCuposDisponibles(ruta);
-              const cuposOcupados = Math.max(cuposTotales - cuposDisponibles, 0);
-              const porcentaje = cuposTotales > 0
-                ? Math.min((cuposOcupados / cuposTotales) * 100, 100)
-                : 0;
+              const reservasRuta = reservas.filter(
+                (solicitud) =>
+                  String(obtenerIdRutaSolicitud(solicitud)) ===
+                  String(ruta.id ?? ruta.id_ruta)
+              );
+
+              const reservasAceptadas = reservasRuta.filter(esReservaAceptada);
+
+              const cuposOcupados = reservasAceptadas.length;
+              const cuposDisponiblesCalculados = Math.max(
+                cuposTotales - cuposOcupados,
+                0
+              );
 
               return (
                 <article className="tarjeta-ruta" key={ruta.id || `${ruta.origen}-${ruta.destino}-${indice}`}>
@@ -692,15 +746,117 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
 
                   <div className="cupos-ruta">
                     <div className="cupos-encabezado">
-                      <span>Ocupación de la ruta</span>
-                      <strong>{cuposOcupados} de {cuposTotales}</strong>
+                      <span>Distribución de cupos</span>
+                      <strong>
+                        {cuposOcupados} de {cuposTotales} ocupados
+                      </strong>
                     </div>
+
                     <div className="barra-cupos">
-                      <div className="barra-cupos-progreso" style={{ width: `${porcentaje}%` }}></div>
+                      <div
+                        className="barra-cupos-progreso"
+                        style={{
+                          width: `${cuposTotales > 0
+                            ? Math.min((cuposOcupados / cuposTotales) * 100, 100)
+                            : 0
+                            }%`,
+                        }}
+                      ></div>
                     </div>
+
+                    <div className="lista-cupos-individuales">
+                      {Array.from({ length: cuposTotales }, (_, indiceCupo) => {
+                        const reserva = reservasAceptadas[indiceCupo];
+                        const pasajero = reserva?.pasajero || {};
+
+                        const tarifa =
+                          reserva?.tarifa_acordada ??
+                          reserva?.tarifa_sugerida ??
+                          ruta.tarifa_contribucion ??
+                          ruta.tarifa_sugerida;
+
+                        return (
+                          <div
+                            key={reserva?.id || `cupo-${ruta.id}-${indiceCupo}`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              padding: "12px",
+                              marginTop: "10px",
+                              border: "1px solid #dfe7ec",
+                              borderRadius: "10px",
+                              background: reserva ? "#f0faf4" : "#fff8f8",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              {reserva && pasajero.foto_url ? (
+                                <img
+                                  src={pasajero.foto_url}
+                                  alt="Foto del pasajero"
+                                  style={{
+                                    width: "40px",
+                                    height: "40px",
+                                    borderRadius: "50%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  style={{
+                                    width: "40px",
+                                    height: "40px",
+                                    borderRadius: "50%",
+                                    display: "grid",
+                                    placeItems: "center",
+                                    background: reserva ? "#d9f2e3" : "#fce3e3",
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {reserva
+                                    ? (pasajero.nombre_completo || "P").charAt(0).toUpperCase()
+                                    : indiceCupo + 1}
+                                </div>
+                              )}
+
+                              <div>
+                                <strong>
+                                  {reserva
+                                    ? pasajero.nombre_completo || "Pasajero reservado"
+                                    : `Cupo ${indiceCupo + 1} - Disponible`}
+                                </strong>
+
+                                {reserva && (
+                                  <div style={{ fontSize: "12px", color: "#687782" }}>
+                                    {pasajero.telefono || pasajero.correo || "Datos no disponibles"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <strong
+                              style={{
+                                color: reserva ? "#16834a" : "#c62828",
+                                whiteSpace: "nowrap",
+                                fontSize: "13px",
+                              }}
+                            >
+                              {tarifa != null
+                                ? `$${Number(tarifa).toLocaleString("es-CO")}`
+                                : "Tarifa pendiente"}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+
                     <span className="cupos-ayuda">
-                      {cuposDisponibles > 0
-                        ? `Quedan ${cuposDisponibles} ${cuposDisponibles === 1 ? "cupo disponible" : "cupos disponibles"}`
+                      {cuposDisponiblesCalculados > 0
+                        ? `Quedan ${cuposDisponiblesCalculados} ${cuposDisponiblesCalculados === 1
+                          ? "cupo disponible"
+                          : "cupos disponibles"
+                        }`
                         : "No quedan cupos disponibles"}
                     </span>
                   </div>

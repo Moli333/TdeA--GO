@@ -2,30 +2,49 @@ import { useEffect, useState } from "react";
 
 export default function MisNotificaciones({ usuario, API_URL }) {
   const [notificaciones, setNotificaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
-
-  const cargarNotificaciones = async () => {
-    try {
-      setCargando(true);
-      const idUsuario = usuario?.id || usuario?.id_usuario;
-      if (!idUsuario) return;
-
-      const respuesta = await fetch(`${API_URL}/api/notificaciones/${idUsuario}`);
-      const datos = await respuesta.json();
-
-      if (!respuesta.ok) throw new Error(datos.mensaje || "Error al cargar.");
-
-      setNotificaciones(Array.isArray(datos) ? datos : []);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setCargando(false);
-    }
-  };
+  const [cargando, setCargando] = useState(
+    Boolean(usuario?.id || usuario?.id_usuario)
+  );
 
   useEffect(() => {
-    cargarNotificaciones();
-  }, [usuario]);
+    let cancelado = false;
+
+    const consultarNotificaciones = async () => {
+      const idUsuario = usuario?.id || usuario?.id_usuario;
+
+      if (!idUsuario) return;
+
+      try {
+        const respuesta = await fetch(
+          `${API_URL}/api/notificaciones/${encodeURIComponent(idUsuario)}`
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.mensaje || "Error al cargar las notificaciones.");
+        }
+
+        if (!cancelado) {
+          setNotificaciones(Array.isArray(datos) ? datos : []);
+        }
+      } catch (error) {
+        if (!cancelado) {
+          console.error("Error al cargar notificaciones:", error);
+        }
+      } finally {
+        if (!cancelado) {
+          setCargando(false);
+        }
+      }
+    };
+
+    consultarNotificaciones();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [usuario?.id, usuario?.id_usuario, API_URL]);
 
   const marcarComoLeida = async (id) => {
     try {

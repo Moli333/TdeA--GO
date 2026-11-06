@@ -753,11 +753,12 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                         const reserva = reservasAceptadas[indiceCupo];
                         const pasajero = reserva?.pasajero || {};
 
-                        const tarifa =
-                          reserva?.tarifa_acordada ??
-                          reserva?.tarifa_sugerida ??
-                          ruta.tarifa_contribucion ??
-                          ruta.tarifa_sugerida;
+                        const tarifa = [
+                          reserva?.tarifa_acordada,
+                          reserva?.tarifa_sugerida,
+                          ruta.tarifa_contribucion,
+                          ruta.tarifa_sugerida,
+                        ].find((valor) => Number(valor) > 0);
 
                         return (
                           <div

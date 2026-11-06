@@ -1,6 +1,181 @@
-
 import { useEffect, useMemo, useState } from "react";
+import { MapContainer, TileLayer, Polyline, CircleMarker, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import "./MisRutas.css";
+
+const TOKEN_MAPBOX = import.meta.env.VITE_MAPBOX_TOKEN;
+
+function AjustarMiniMapa({ posiciones }) {
+  const mapa = useMap();
+
+  useEffect(() => {
+    if (posiciones.length > 1) {
+      mapa.fitBounds(posiciones, { padding: [12, 12] });
+    }
+  }, [mapa, posiciones]);
+
+  return null;
+}
+
+function MiniMapaRuta({ ruta }) {
+  const [posiciones, setPosiciones] = useState([]);
+  const [cargandoMapa, setCargandoMapa] = useState(true);
+  const [errorMapa, setErrorMapa] = useState("");
+
+  useEffect(() => {
+    let cancelado = false;
+    const controlador = new AbortController();
+
+    const latOrigen = Number(ruta.lat_origen);
+    const lngOrigen = Number(ruta.lng_origen);
+    const latDestino = Number(ruta.lat_destino);
+    const lngDestino = Number(ruta.lng_destino);
+
+    const coordenadasValidas = [
+      ruta.lat_origen,
+      ruta.lng_origen,
+      ruta.lat_destino,
+      ruta.lng_destino,
+    ].every((valor) => valor !== null && valor !== undefined && valor !== "")
+      && [latOrigen, lngOrigen, latDestino, lngDestino].every(Number.isFinite);
+
+    const cargarRecorrido = async () => {
+      if (!coordenadasValidas) {
+        setErrorMapa("Ubicaciones sin coordenadas");
+        setCargandoMapa(false);
+        return;
+      }
+
+      if (!TOKEN_MAPBOX) {
+        setErrorMapa("Mapa no disponible");
+        setCargandoMapa(false);
+        return;
+      }
+
+      try {
+        const url =
+          `https://api.mapbox.com/directions/v5/mapbox/driving/` +
+          `${lngOrigen},${latOrigen};${lngDestino},${latDestino}` +
+          `?geometries=geojson&overview=full&access_token=${TOKEN_MAPBOX}`;
+
+        const respuesta = await fetch(url, {
+          signal: controlador.signal,
+        });
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok || !datos.routes?.length) {
+          throw new Error("No fue posible obtener el recorrido.");
+        }
+
+        const coordenadas = datos.routes[0].geometry.coordinates.map(
+          ([lng, lat]) => [lat, lng]
+        );
+
+        if (!cancelado) {
+          setPosiciones(coordenadas);
+          setErrorMapa("");
+        }
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error("Error al cargar mini mapa:", error);
+          if (!cancelado) setErrorMapa("No se pudo cargar el recorrido");
+        }
+      } finally {
+        if (!cancelado) setCargandoMapa(false);
+      }
+    };
+
+    cargarRecorrido();
+
+    return () => {
+      cancelado = true;
+      controlador.abort();
+    };
+  }, [
+    ruta.lat_origen,
+    ruta.lng_origen,
+    ruta.lat_destino,
+    ruta.lng_destino,
+  ]);
+
+  if (cargandoMapa || errorMapa) {
+    return (
+      <div
+        style={{
+          height: "150px",
+          display: "grid",
+          placeItems: "center",
+          background: "#f2f5f7",
+          borderRadius: "12px",
+          color: "#687782",
+          fontSize: "13px",
+          marginTop: "16px",
+        }}
+      >
+        {cargandoMapa ? "Cargando recorrido..." : errorMapa}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        height: "150px",
+        marginTop: "16px",
+        borderRadius: "12px",
+        overflow: "hidden",
+        border: "1px solid #dfe7ec",
+      }}
+    >
+      <MapContainer
+        center={posiciones[0]}
+        zoom={13}
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom={false}
+        dragging={false}
+        doubleClickZoom={false}
+        zoomControl={false}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+
+        <Polyline
+          positions={posiciones}
+          pathOptions={{
+            color: "#1769aa",
+            weight: 5,
+            opacity: 0.9,
+          }}
+        />
+
+        <CircleMarker
+          center={posiciones[0]}
+          radius={5}
+          pathOptions={{
+            color: "#16834a",
+            fillColor: "#16834a",
+            fillOpacity: 1,
+          }}
+        />
+
+        <CircleMarker
+          center={posiciones[posiciones.length - 1]}
+          radius={5}
+          pathOptions={{
+            color: "#c62828",
+            fillColor: "#c62828",
+            fillOpacity: 1,
+          }}
+        />
+
+        <AjustarMiniMapa posiciones={posiciones} />
+      </MapContainer>
+    </div>
+  );
+}
 
 function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000" }) {
   const [rutas, setRutas] = useState([]);

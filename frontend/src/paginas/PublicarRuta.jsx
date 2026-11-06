@@ -116,6 +116,32 @@ function PublicarRuta({ usuario, API_URL }) {
   const [recorrido, setRecorrido] = useState(null);
   const [cargandoRecorrido, setCargandoRecorrido] = useState(false);
   const [errorRecorrido, setErrorRecorrido] = useState("");
+  const [vehiculoConductor, setVehiculoConductor] = useState(null);
+
+  useEffect(() => {
+    if (!usuario?.id) return;
+
+    const consultarVehiculo = async () => {
+      try {
+        const respuesta = await fetch(
+          `${API_URL}/api/vehiculos/${usuario.id}`
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error("No fue posible consultar el vehículo.");
+        }
+
+        setVehiculoConductor(datos.vehiculo || null);
+      } catch (error) {
+        console.error("Error consultando vehículo:", error);
+        setVehiculoConductor(null);
+      }
+    };
+
+    consultarVehiculo();
+  }, [usuario?.id, API_URL]);
 
   useEffect(() => {
     if (!ubicacionOrigen || !ubicacionDestino) {
@@ -187,6 +213,29 @@ function PublicarRuta({ usuario, API_URL }) {
 
     return () => controlador.abort();
   }, [ubicacionOrigen, ubicacionDestino]);
+
+  const tipoTarifa =
+    vehiculoConductor?.tipo === "Otro"
+      ? vehiculoConductor?.clasificacion_tarifa
+      : vehiculoConductor?.tipo === "Camioneta"
+        ? "Automóvil"
+        : vehiculoConductor?.tipo;
+
+  const valorPorKm = tipoTarifa === "Motocicleta" ? 700 : 1000;
+  const tarifaMinima = tipoTarifa === "Motocicleta" ? 7000 : 8300;
+
+  const costoBase = recorrido ? recorrido.distancia * valorPorKm : 0;
+
+  const costoTotalEstimado = recorrido
+    ? costoBase <= tarifaMinima
+      ? tarifaMinima
+      : Math.ceil(costoBase / 500) * 500
+    : 0;
+
+  const aporteSugerido =
+    costoTotalEstimado > 0 && Number(cupos) > 0
+      ? Math.ceil(costoTotalEstimado / Number(cupos))
+      : 0;
 
   const obtenerCoordenadas = async (lugar) => {
     const respuesta = await fetch(
@@ -409,6 +458,13 @@ function PublicarRuta({ usuario, API_URL }) {
       return;
     }
 
+    if (!recorrido || cargandoRecorrido || !vehiculoConductor) {
+      setError(
+        "Espera a que se calcule el recorrido y se consulte tu vehículo."
+      );
+      return;
+    }
+
     setGuardando(true);
 
     try {
@@ -421,7 +477,7 @@ function PublicarRuta({ usuario, API_URL }) {
           },
           body: JSON.stringify({
             conductor_id: usuario.id,
-
+            distancia_km: Number(recorrido.distancia.toFixed(2)),
             origen: origen.trim(),
             destino: destino.trim(),
 
@@ -446,7 +502,6 @@ function PublicarRuta({ usuario, API_URL }) {
             cupos_disponibles:
               Number(cupos),
 
-            tarifa_contribucion: 0,
           }),
         }
       );
@@ -1012,19 +1067,51 @@ function PublicarRuta({ usuario, API_URL }) {
             )}
 
             {recorrido && (
-              <div className="info-recorrido">
-                <div>
-                  <strong>
-                    {recorrido.distancia.toFixed(1)} km
-                  </strong>
-                  <span>Distancia aproximada</span>
+              <div>
+                <div className="info-recorrido">
+                  <div>
+                    <strong>
+                      {recorrido.distancia.toFixed(1)} km
+                    </strong>
+                    <span>Distancia aproximada</span>
+                  </div>
+
+                  <div>
+                    <strong>
+                      {Math.ceil(recorrido.duracion)} min
+                    </strong>
+                    <span>Duración estimada</span>
+                  </div>
                 </div>
 
-                <div>
-                  <strong>
-                    {Math.ceil(recorrido.duracion)} min
-                  </strong>
-                  <span>Duración estimada</span>
+                <div className="info-tarifa-publicar">
+                  <div>
+                    <span>Costo total estimado del recorrido</span>
+                    <strong>
+                      {costoTotalEstimado.toLocaleString("es-CO", {
+                        style: "currency",
+                        currency: "COP",
+                        maximumFractionDigits: 0,
+                      })}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Aporte sugerido por pasajero</span>
+                    <strong>
+                      {aporteSugerido.toLocaleString("es-CO", {
+                        style: "currency",
+                        currency: "COP",
+                        maximumFractionDigits: 0,
+                      })}
+                    </strong>
+                  </div>
+
+                  <p>
+                    El costo estimado del recorrido se distribuye entre los
+                    {` ${cupos || 0} `}cupos ofrecidos. Puedes negociar un
+                    aporte superior, pero no inferior al sugerido.
+                  </p>
                 </div>
               </div>
             )}

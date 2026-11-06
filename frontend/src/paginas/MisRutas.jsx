@@ -8,6 +8,8 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   const [reservas, setReservas] = useState([]);
   const [cargandoReservas, setCargandoReservas] = useState(true);
   const [errorReservas, setErrorReservas] = useState("");
+  const [procesandoSolicitud, setProcesandoSolicitud] = useState(null);
+  const [procesandoSolicitud, setProcesandoSolicitud] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(true);
   const [error, setError] = useState("");
@@ -199,6 +201,68 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
     return "estado-disponible";
   };
 
+  const responderSolicitud = async (solicitud, accion) => {
+    try {
+      const token = usuario?.token || usuario?.access_token;
+
+      if (!token) {
+        throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
+      }
+
+      setProcesandoSolicitud(solicitud.id);
+
+      const respuesta = await fetch(
+        `${API_URL}/api/solicitudes/${encodeURIComponent(solicitud.id)}/responder`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ accion }),
+        }
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(datos.mensaje || "No fue posible responder la solicitud.");
+      }
+
+      // Actualizar el estado de la solicitud en pantalla
+      setReservas((anteriores) =>
+        anteriores.map((item) =>
+          String(item.id) === String(solicitud.id)
+            ? { ...item, estado: datos.resultado.estado }
+            : item
+        )
+      );
+
+      // Si se acepta, actualizar los cupos disponibles de la ruta
+      if (accion === "aceptar") {
+        const idRuta = solicitud.viaje_id || solicitud.ruta?.id;
+
+        setRutas((anteriores) =>
+          anteriores.map((ruta) =>
+            String(ruta.id) === String(idRuta)
+              ? {
+                ...ruta,
+                cupos_disponibles: datos.resultado.cupos_disponibles,
+              }
+              : ruta
+          )
+        );
+      }
+
+      alert(datos.mensaje);
+    } catch (error) {
+      console.error("Error al responder la solicitud:", error);
+      alert(error.message || "Ocurrió un error al responder la solicitud.");
+    } finally {
+      setProcesandoSolicitud(null);
+    }
+  };
+
   if (!usuario?.id) {
     return (
       <section className="pagina-servicio mis-rutas-pagina">
@@ -367,6 +431,31 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                         ? new Date(solicitud.fecha_solicitud).toLocaleString("es-CO")
                         : "Fecha no disponible"}
                     </div>
+
+                    {(solicitud.estado || "").toLowerCase() === "pendiente" && (
+                      <div className="solicitud-acciones">
+                        <button
+                          type="button"
+                          className="boton-aceptar-solicitud"
+                          disabled={procesandoSolicitud !== null}
+                          onClick={() => responderSolicitud(solicitud, "aceptar")}
+                        >
+                          {procesandoSolicitud === solicitud.id
+                            ? "Procesando..."
+                            : "Aceptar cupo"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="boton-rechazar-solicitud"
+                          disabled={procesandoSolicitud !== null}
+                          onClick={() => responderSolicitud(solicitud, "rechazar")}
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    )}
+
                   </article>
                 );
               })}

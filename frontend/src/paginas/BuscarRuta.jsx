@@ -18,6 +18,7 @@ function BuscarRutas({
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState("");
   const [solicitandoId, setSolicitandoId] = useState(null);
+  const [rutasRechazadas, setRutasRechazadas] = useState([]);
 
   const mapaContenedor = useRef(null);
   const mapa = useRef(null);
@@ -55,6 +56,45 @@ function BuscarRutas({
 
     cargarRutas();
   }, [API_URL]);
+
+  useEffect(() => {
+    const cargarSolicitudesPasajero = async () => {
+      const idPasajero = usuario?.id || usuario?.id_usuario;
+      const token = usuario?.token || usuario?.access_token;
+
+      if (!idPasajero || !token) {
+        setRutasRechazadas([]);
+        return;
+      }
+
+      try {
+        const respuesta = await fetch(
+          `${API_URL}/api/solicitudes/pasajero/${encodeURIComponent(idPasajero)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.mensaje || "No fue posible consultar tus solicitudes.");
+        }
+
+        const rechazadas = (datos.solicitudes || [])
+          .filter((solicitud) => solicitud.estado === "rechazada")
+          .map((solicitud) => String(solicitud.viaje_id));
+
+        setRutasRechazadas(rechazadas);
+      } catch (error) {
+        console.error("Error al consultar solicitudes del pasajero:", error);
+      }
+    };
+
+    cargarSolicitudesPasajero();
+  }, [usuario?.id, usuario?.id_usuario, usuario?.token, usuario?.access_token, API_URL]);
 
   // ---------------------------------------------------------
   // MANEJAR SOLICITUD DE CUPO
@@ -96,21 +136,6 @@ function BuscarRutas({
 
       alert(datos.mensaje || "¡Cupo solicitado y plaza reservada correctamente!");
 
-      // Descontar cupo localmente en la lista de rutas
-      setRutas((rutasAnteriores) =>
-        rutasAnteriores.map((item) => {
-          if (item.id === ruta.id) {
-            const cuposActuales = Number(
-              item.cupos_disponibles ?? item.cuposDisponibles ?? item.cupos ?? 0
-            );
-            return {
-              ...item,
-              cupos_disponibles: Math.max(0, cuposActuales - 1),
-            };
-          }
-          return item;
-        })
-      );
     } catch (error) {
       console.error("Error al solicitar cupo:", error);
       alert(error.message || "Ocurrió un error al procesar tu solicitud.");
@@ -125,6 +150,11 @@ function BuscarRutas({
 
   const rutasFiltradas = useMemo(() => {
     return rutas.filter((ruta) => {
+      // Ocultar las rutas que este pasajero tiene rechazadas
+      if (rutasRechazadas.includes(String(ruta.id || ruta.id_ruta))) {
+        return false;
+      }
+
       const coincideOrigen =
         !origen ||
         String(ruta.origen || "")
@@ -142,7 +172,7 @@ function BuscarRutas({
 
       return coincideOrigen && coincideDestino && coincideFecha;
     });
-  }, [rutas, origen, destino, fecha]);
+  }, [rutas, origen, destino, fecha, rutasRechazadas]);
 
   // ---------------------------------------------------------
   // CREAR MAPA

@@ -1286,23 +1286,41 @@ app.post("/api/rutas", async (req, res) => {
       hora,
       cupos_totales,
       cupos,
-      tarifa_contribucion,
-      tarifa,
+      distancia_km,
     } = req.body;
 
     const idConductor =
       conductor_id || id_conductor || user_id;
 
-    const totalCupos =
-      cupos_totales || cupos || 4;
+    const totalCupos = Number(
+      cupos_totales || cupos || 4
+    );
 
-    const contribucion =
-      tarifa_contribucion || tarifa || 0;
+    const distanciaKm = Number(distancia_km);
 
     if (!idConductor || !origen || !destino) {
       return res.status(400).json({
         mensaje:
           "Faltan campos obligatorios (conductor, origen o destino).",
+      });
+    }
+
+    if (
+      !Number.isInteger(totalCupos) ||
+      totalCupos < 1
+    ) {
+      return res.status(400).json({
+        mensaje: "La cantidad de cupos no es válida.",
+      });
+    }
+
+    if (
+      !Number.isFinite(distanciaKm) ||
+      distanciaKm <= 0
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "No se recibió una distancia válida para calcular la tarifa.",
       });
     }
 
@@ -1335,7 +1353,7 @@ app.post("/api/rutas", async (req, res) => {
       error: errorVehiculoConductor,
     } = await dbClient
       .from("vehiculos")
-      .select("id")
+      .select("id, tipo, clasificacion_tarifa")
       .eq("usuario_id", idConductor)
       .limit(1)
       .maybeSingle();
@@ -1351,6 +1369,43 @@ app.post("/api/rutas", async (req, res) => {
         requiereVehiculo: true,
       });
     }
+
+    // Determinar la clasificación tarifaria del vehículo.
+    const tipoTarifa =
+      vehiculoConductor.tipo === "Otro"
+        ? vehiculoConductor.clasificacion_tarifa
+        : vehiculoConductor.tipo === "Camioneta"
+          ? "Automóvil"
+          : vehiculoConductor.tipo;
+
+    if (
+      tipoTarifa !== "Automóvil" &&
+      tipoTarifa !== "Motocicleta"
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "El vehículo no tiene una clasificación tarifaria válida.",
+      });
+    }
+
+    // Calcular el costo total estimado del recorrido.
+    const valorPorKm =
+      tipoTarifa === "Motocicleta" ? 700 : 1000;
+
+    const tarifaMinima =
+      tipoTarifa === "Motocicleta" ? 7000 : 8300;
+
+    const costoBase = distanciaKm * valorPorKm;
+
+    const costoTotalEstimado =
+      costoBase <= tarifaMinima
+        ? tarifaMinima
+        : Math.ceil(costoBase / 500) * 500;
+
+    // Dividir entre los cupos originalmente ofrecidos.
+    const aporteSugerido = Math.ceil(
+      costoTotalEstimado / totalCupos
+    );
 
     let fechaHoraSalida = fecha_hora_salida;
 
@@ -1386,9 +1441,11 @@ app.post("/api/rutas", async (req, res) => {
             ? Number(lng_destino)
             : null,
         fecha_hora_salida: fechaHoraSalida,
-        cupos_totales: Number(totalCupos),
-        cupos_disponibles: Number(totalCupos),
-        tarifa_contribucion: Number(contribucion),
+        cupos_totales: totalCupos,
+        cupos_disponibles: totalCupos,
+        distancia_km: distanciaKm,
+        tarifa_sugerida: aporteSugerido,
+        tarifa_contribucion: aporteSugerido,
         estado: "programado",
       })
       .select()
@@ -1419,6 +1476,7 @@ app.post("/api/rutas", async (req, res) => {
     });
   }
 });
+
 // ------------------------------------------------------------------
 // 10. RUTAS DE UN CONDUCTOR
 // GET /api/rutas/conductor/:id
@@ -1583,16 +1641,6 @@ app.post("/api/solicitudes", async (req, res) => {
 
     if (error) throw error;
 
-    // 5. Descontar 1 cupo disponible de la ruta publicada
-    const { error: errorUpdate } = await dbClient
-      .from("rutas")
-      .update({ cupos_disponibles: cuposActuales - 1 })
-      .eq("id", idViaje);
-
-    if (errorUpdate) {
-      console.error("Error al descontar cupo de la ruta:", errorUpdate);
-    }
-
     // 6. CREAR NOTIFICACIÓN AUTOMÁTICA PARA EL CONDUCTOR
     if (ruta.conductor_id) {
       const { error: errorNotif } = await dbClient
@@ -1612,7 +1660,7 @@ app.post("/api/solicitudes", async (req, res) => {
     }
 
     res.status(201).json({
-      mensaje: "¡Solicitud de cupo enviada y plaza reservada correctamente!",
+      mensaje: "¡Solicitud enviada! El conductor debe aceptar tu cupo para confirmar la reserva.",
       solicitud: data,
     });
   } catch (error) {
@@ -1839,8 +1887,6 @@ app.patch(
   }
 );
 
-
-
 // CONDUCTOR: Consultar solicitudes de cupos para rutas publicadas
 app.get(
   "/api/solicitudes/conductor/:conductor_id",
@@ -1936,6 +1982,162 @@ app.get(
   }
 );
 
+// RESPONDER SOLICITUD DE CUPO (ACEPTAR O RECHAZAR)
+app.patch(
+  "/api/solicitudes/:id/responder",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { accion } = req.body;
+
+      if (!["aceptar", "rechazar"].includes(accion)) {
+        return res.status(400).json({
+          mensaje: "La acción debe ser aceptar o rechazar.",
+        });
+      }
+
+      // Buscar el perfil del usuario autenticado
+      let { data: perfil, error: errorPerfil } = await dbClient
+        .from("profiles")
+        .select("id, correo, rol")
+        .eq("id", req.usuarioAutenticado.id)
+        .maybeSingle();
+
+      // Si no se encuentra por ID, intentar por correo
+      if (!perfil && req.usuarioAutenticado.email) {
+        const resultadoCorreo = await dbClient
+          .from("profiles")
+          .select("id, correo, rol")
+          .ilike("correo", req.usuarioAutenticado.email)
+          .maybeSingle();
+
+        perfil = resultadoCorreo.data;
+        errorPerfil = resultadoCorreo.error;
+      }
+
+      if (errorPerfil) {
+        console.error("Error buscando perfil:", errorPerfil);
+        return res.status(500).json({
+          mensaje: "No fue posible verificar tu perfil.",
+        });
+      }
+
+      if (!perfil) {
+        return res.status(404).json({
+          mensaje: "No se encontró tu perfil.",
+        });
+      }
+
+      if (perfil.rol !== "conductor") {
+        return res.status(403).json({
+          mensaje: "Solo el conductor puede responder esta solicitud.",
+        });
+      }
+
+      // Ejecutar la función transaccional de Supabase
+      const { data: resultado, error } = await dbClient.rpc(
+        "responder_solicitud_cupo",
+        {
+          p_solicitud_id: id,
+          p_conductor_id: perfil.id,
+          p_accion: accion,
+        }
+      );
+
+      if (error) {
+        console.error("Error al responder solicitud:", error);
+
+        const mensaje = error.message || "No fue posible responder la solicitud.";
+
+        const estadoHttp = mensaje.includes("autorización")
+          ? 403
+          : mensaje.includes("no existe")
+            ? 404
+            : mensaje.includes("No quedan cupos") ||
+              mensaje.includes("ya fue atendida")
+              ? 409
+              : 400;
+
+        return res.status(estadoHttp).json({ mensaje });
+      }
+
+      return res.status(200).json({
+        mensaje:
+          accion === "aceptar"
+            ? "Solicitud aceptada. El cupo ha sido reservado."
+            : "Solicitud rechazada.",
+        resultado,
+      });
+    } catch (error) {
+      console.error("Error al responder solicitud:", error);
+
+      return res.status(500).json({
+        mensaje: "Error interno al responder la solicitud.",
+      });
+    }
+  }
+);
+
+// CONSULTAR SOLICITUDES DEL PASAJERO
+app.get(
+  "/api/solicitudes/pasajero/:pasajero_id",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { pasajero_id } = req.params;
+
+      let { data: perfil, error } = await dbClient
+        .from("profiles")
+        .select("id")
+        .eq("id", req.usuarioAutenticado.id)
+        .maybeSingle();
+
+      if (!perfil && req.usuarioAutenticado.email) {
+        const resultado = await dbClient
+          .from("profiles")
+          .select("id")
+          .ilike("correo", req.usuarioAutenticado.email)
+          .maybeSingle();
+
+        perfil = resultado.data;
+        error = resultado.error;
+      }
+
+      if (error) throw error;
+
+      if (!perfil) {
+        return res.status(404).json({
+          mensaje: "No se encontró tu perfil.",
+        });
+      }
+
+      if (String(perfil.id) !== String(pasajero_id)) {
+        return res.status(403).json({
+          mensaje: "No tienes autorización para consultar estas solicitudes.",
+        });
+      }
+
+      const { data, error: errorSolicitudes } = await dbClient
+        .from("solicitudes_viaje")
+        .select("viaje_id, estado")
+        .eq("pasajero_id", perfil.id);
+
+      if (errorSolicitudes) throw errorSolicitudes;
+
+      return res.status(200).json({
+        solicitudes: data || [],
+      });
+    } catch (error) {
+      console.error("Error consultando solicitudes del pasajero:", error);
+
+      return res.status(500).json({
+        mensaje: "No fue posible consultar tus solicitudes.",
+      });
+    }
+  }
+);
+
 // ------------------------------------------------------------------
 // NOTIFICACIONES
 // ------------------------------------------------------------------
@@ -1984,52 +2186,6 @@ app.patch("/api/notificaciones/:id/leida", async (req, res) => {
     res.status(500).json({ mensaje: "No fue posible actualizar la notificación." });
   }
 });
-
-
-// ------------------------------------------------------------------
-// 12. SOLICITUDES DE UN PASAJERO
-// GET /api/solicitudes/pasajero/:id
-// ------------------------------------------------------------------
-
-app.get(
-  "/api/solicitudes/pasajero/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const { data, error } = await dbClient
-        .from("solicitudes_viaje")
-        .select(`
-          id,
-          viaje_id,
-          pasajero_id,
-          punto_encuentro,
-          estado,
-          fecha_solicitud
-        `)
-        .eq("pasajero_id", id)
-        .order("fecha_solicitud", {
-          ascending: false,
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      res.json(data || []);
-    } catch (error) {
-      console.error(
-        "Error obteniendo solicitudes:",
-        error
-      );
-
-      res.status(500).json({
-        mensaje: "No fue posible consultar tus solicitudes.",
-      });
-    }
-  }
-);
-
 
 // ------------------------------------------------------------------
 // 13. CREAR SOLICITUD DE VIAJE NUEVO

@@ -478,6 +478,7 @@ function PublicarRuta({ usuario, API_URL }) {
           body: JSON.stringify({
             conductor_id: usuario.id,
             distancia_km: Number(recorrido.distancia.toFixed(2)),
+            duracion_minutos: Number(recorrido.duracion.toFixed(2)),
             origen: origen.trim(),
             destino: destino.trim(),
 

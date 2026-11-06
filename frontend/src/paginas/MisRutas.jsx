@@ -283,22 +283,6 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
         }
       }
 
-      // Si se acepta, actualizar los cupos disponibles de la ruta
-      if (accion === "aceptar") {
-        const idRuta = solicitud.viaje_id || solicitud.ruta?.id;
-
-        setRutas((anteriores) =>
-          anteriores.map((ruta) =>
-            String(ruta.id) === String(idRuta)
-              ? {
-                ...ruta,
-                cupos_disponibles: datos.resultado.cupos_disponibles,
-              }
-              : ruta
-          )
-        );
-      }
-
       alert(datos.mensaje);
     } catch (error) {
       console.error("Error al responder la solicitud:", error);

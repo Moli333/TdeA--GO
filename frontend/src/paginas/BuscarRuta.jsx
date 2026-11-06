@@ -100,30 +100,33 @@ function BuscarRutas({
   // MANEJAR SOLICITUD DE CUPO
   // ---------------------------------------------------------
 
+
   const manejarSolicitud = async (ruta) => {
-    // Si el padre ya provee un handler personalizado, lo usamos
+    // Si el componente padre proporciona una función personalizada, usarla.
     if (onSolicitarCupo) {
       onSolicitarCupo(ruta);
       return;
     }
 
     const idPasajero = usuario?.id || usuario?.id_usuario;
+    const token = usuario?.token || usuario?.access_token;
 
-    if (!idPasajero) {
-      alert("Debes iniciar sesión como pasajero para solicitar un cupo.");
+    if (!idPasajero || !token) {
+      alert("Debes iniciar sesión para solicitar un cupo.");
       return;
     }
 
     try {
-      setSolicitandoId(ruta.id);
+      setSolicitandoId(ruta.id || ruta.id_ruta);
 
       const respuesta = await fetch(`${API_URL}/api/solicitudes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ruta_id: ruta.id,
+          viaje_id: ruta.id || ruta.id_ruta,
           pasajero_id: idPasajero,
         }),
       });
@@ -131,11 +134,15 @@ function BuscarRutas({
       const datos = await respuesta.json();
 
       if (!respuesta.ok) {
-        throw new Error(datos.mensaje || "No fue posible solicitar el cupo.");
+        throw new Error(
+          datos.mensaje || "No fue posible solicitar el cupo."
+        );
       }
 
-      alert(datos.mensaje || "¡Cupo solicitado y plaza reservada correctamente!");
-
+      alert(
+        datos.mensaje ||
+        "Solicitud enviada correctamente. El conductor debe confirmar el cupo."
+      );
     } catch (error) {
       console.error("Error al solicitar cupo:", error);
       alert(error.message || "Ocurrió un error al procesar tu solicitud.");

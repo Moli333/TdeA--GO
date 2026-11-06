@@ -916,6 +916,8 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                     </div>
                   </div>
 
+                  <MiniMapaRuta ruta={ruta} />
+
                   <div className="informacion-ruta">
                     <div className="dato-ruta">
                       <span className="dato-etiqueta">FECHA</span>

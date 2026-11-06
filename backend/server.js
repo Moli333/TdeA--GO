@@ -429,7 +429,7 @@ app.post("/api/login", async (req, res) => {
     } = await dbClient
       .from("vehiculos")
       .select(
-        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
+        "id, usuario_id, tipo, clasificacion_tarifa, marca_modelo, placa, color, capacidad_maxima"
       )
       .eq("usuario_id", profile.id)
       .maybeSingle();
@@ -2396,14 +2396,30 @@ app.post("/api/vehiculos", async (req, res) => {
     const {
       conductor_id,
       tipo,
+      clasificacion_tarifa,
       marca_modelo,
       placa,
       color,
       capacidad_maxima,
     } = req.body;
 
+    const tipoVehiculo = tipo?.trim() || "Automóvil";
+
+    const tiposPermitidos = [
+      "Automóvil",
+      "Motocicleta",
+      "Camioneta",
+      "Otro",
+    ];
+
+    const clasificacionesPermitidas = [
+      "Automóvil",
+      "Motocicleta",
+    ];
+
     if (
       !conductor_id ||
+      !tiposPermitidos.includes(tipoVehiculo) ||
       !marca_modelo?.trim() ||
       !placa?.trim() ||
       !Number.isInteger(Number(capacidad_maxima)) ||
@@ -2411,9 +2427,24 @@ app.post("/api/vehiculos", async (req, res) => {
     ) {
       return res.status(400).json({
         mensaje:
-          "Completa el conductor, la marca/modelo, la placa y una capacidad máxima válida.",
+          "Completa los datos del vehículo y selecciona un tipo válido.",
       });
     }
+
+    if (
+      tipoVehiculo === "Otro" &&
+      !clasificacionesPermitidas.includes(clasificacion_tarifa)
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "Debes clasificar tu vehículo como automóvil o motocicleta para calcular la tarifa.",
+      });
+    }
+
+    const clasificacionFinal =
+      tipoVehiculo === "Otro"
+        ? clasificacion_tarifa
+        : null;
 
     const { data, error } = await dbClient
       .from("vehiculos")
@@ -2421,7 +2452,8 @@ app.post("/api/vehiculos", async (req, res) => {
         [
           {
             usuario_id: conductor_id,
-            tipo: tipo ? tipo.trim() : "Automóvil",
+            tipo: tipoVehiculo,
+            clasificacion_tarifa: clasificacionFinal,
             marca_modelo: marca_modelo.trim(),
             placa: placa.trim().toUpperCase(),
             color: color ? String(color).trim() : null,
@@ -2469,7 +2501,7 @@ app.get("/api/vehiculos/:usuarioId", async (req, res) => {
     const { data, error } = await dbClient
       .from("vehiculos")
       .select(
-        "id, usuario_id, tipo, marca_modelo, placa, color, capacidad_maxima"
+        "id, usuario_id, tipo, clasificacion_tarifa, marca_modelo, placa, color, capacidad_maxima"
       )
       .eq("usuario_id", usuarioId)
       .maybeSingle();

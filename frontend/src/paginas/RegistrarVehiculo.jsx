@@ -11,6 +11,7 @@ function RegistrarVehiculo({
   onVehiculoRegistrado,
 }) {
   const [tipo, setTipo] = useState("Automóvil");
+  const [clasificacionTarifa, setClasificacionTarifa] = useState("");
   const [marcaModelo, setMarcaModelo] = useState("");
   const [placa, setPlaca] = useState("");
   const [color, setColor] = useState("");
@@ -57,6 +58,9 @@ function RegistrarVehiculo({
 
         if (encontrado) {
           setTipo(encontrado.tipo || "Automóvil");
+          setClasificacionTarifa(
+            encontrado.clasificacion_tarifa || ""
+          );
           setMarcaModelo(encontrado.marca_modelo || "");
           setPlaca(encontrado.placa || "");
           setColor(encontrado.color || "");
@@ -105,6 +109,16 @@ function RegistrarVehiculo({
       return;
     }
 
+    if (
+      tipo === "Otro" &&
+      !["Automóvil", "Motocicleta"].includes(clasificacionTarifa)
+    ) {
+      setError(
+        "Selecciona si tu vehículo se clasifica como automóvil o motocicleta."
+      );
+      return;
+    }
+
     try {
       setCargando(true);
 
@@ -114,6 +128,8 @@ function RegistrarVehiculo({
         body: JSON.stringify({
           conductor_id: usuarioId,
           tipo,
+          clasificacion_tarifa:
+            tipo === "Otro" ? clasificacionTarifa : null,
           marca_modelo: marcaModelo.trim(),
           placa: placa.trim().toUpperCase(),
           color: color.trim(),
@@ -132,6 +148,8 @@ function RegistrarVehiculo({
       const vehiculoGuardado = datos.vehiculo || {
         usuario_id: usuarioId,
         tipo,
+        clasificacion_tarifa:
+          tipo === "Otro" ? clasificacionTarifa : null,
         marca_modelo: marcaModelo.trim(),
         placa: placa.trim().toUpperCase(),
         color: color.trim(),
@@ -212,6 +230,16 @@ function RegistrarVehiculo({
               <span>Tipo</span>
               <strong>{vehiculo.tipo || "No disponible"}</strong>
             </div>
+
+            {vehiculo.tipo === "Otro" && (
+              <div className="vehiculo-dato">
+                <span>Clasificación de tarifa</span>
+                <strong>
+                  {vehiculo.clasificacion_tarifa || "No especificada"}
+                </strong>
+              </div>
+            )}
+
             <div className="vehiculo-dato">
               <span>Marca y modelo</span>
               <strong>{vehiculo.marca_modelo || "No disponible"}</strong>
@@ -246,7 +274,13 @@ function RegistrarVehiculo({
             <select
               id="vehiculo-tipo"
               value={tipo}
-              onChange={(evento) => setTipo(evento.target.value)}
+              onChange={(evento) => {
+                setTipo(evento.target.value);
+
+                if (evento.target.value !== "Otro") {
+                  setClasificacionTarifa("");
+                }
+              }}
               required
             >
               <option value="Automóvil">Automóvil</option>
@@ -255,6 +289,32 @@ function RegistrarVehiculo({
               <option value="Otro">Otro</option>
             </select>
           </div>
+
+          {tipo === "Otro" && (
+            <div className="vehiculo-campo">
+              <label htmlFor="vehiculo-clasificacion-tarifa">
+                Clasificación para calcular la tarifa *
+              </label>
+
+              <select
+                id="vehiculo-clasificacion-tarifa"
+                value={clasificacionTarifa}
+                onChange={(evento) =>
+                  setClasificacionTarifa(evento.target.value)
+                }
+                required
+              >
+                <option value="">Selecciona una clasificación</option>
+                <option value="Automóvil">Automóvil</option>
+                <option value="Motocicleta">Motocicleta</option>
+              </select>
+
+              <small>
+                Esta clasificación permite calcular el aporte sugerido
+                según el tipo de vehículo.
+              </small>
+            </div>
+          )}
 
           <div className="vehiculo-campo">
             <label htmlFor="vehiculo-marca">Marca y modelo *</label>

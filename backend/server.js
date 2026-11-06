@@ -1313,6 +1313,23 @@ app.get("/api/rutas", async (req, res) => {
       reservasPorRuta[rutaId].push(solicitud);
     });
 
+    // Identificar al usuario autenticado, si existe un token.
+    const encabezadoAutorizacion = req.headers.authorization || "";
+    const tokenAutenticacion = encabezadoAutorizacion.startsWith("Bearer ")
+      ? encabezadoAutorizacion.substring(7)
+      : null;
+
+    let usuarioAutenticado = null;
+
+    if (tokenAutenticacion) {
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser(tokenAutenticacion);
+
+      if (!authError && authData?.user) {
+        usuarioAutenticado = authData.user;
+      }
+    }
+
     // Preparar la información completa de cada ruta.
     const rutas = listaRutas.map((ruta) => {
       const reservasAceptadas =
@@ -1359,7 +1376,9 @@ app.get("/api/rutas", async (req, res) => {
           : null,
         vehiculo:
           vehiculosPorConductor[String(ruta.conductor_id)] || null,
-        reservas_aceptadas: reservasAceptadas,
+        reservas_aceptadas: usuarioAutenticado
+          ? reservasAceptadas
+          : [],
         creado_en: ruta.creado_en
       };
     });

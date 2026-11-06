@@ -1,3 +1,4 @@
+
 /* =========================================================
    TDEA GO
    BUSCAR RUTAS
@@ -8,6 +9,7 @@
   max-width: 1180px;
   margin: 0 auto;
   padding: 34px 24px 50px;
+  box-sizing: border-box;
 }
 
 .buscar-rutas-encabezado {
@@ -53,6 +55,7 @@
   border-radius: 16px;
   background: #ffffff;
   box-shadow: 0 8px 25px rgba(7, 59, 104, 0.07);
+  box-sizing: border-box;
 }
 
 .campo-busqueda {
@@ -143,12 +146,14 @@
    ========================================================= */
 
 .tarjeta-ruta {
+  min-width: 0;
   padding: 21px;
   border: 1px solid #e3eaf0;
   border-radius: 16px;
   background: #ffffff;
   box-shadow: 0 7px 22px rgba(7, 59, 104, 0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
 }
 
 .tarjeta-ruta:hover {
@@ -158,7 +163,7 @@
 
 .ruta-principal {
   display: grid;
-  grid-template-columns: 1fr 30px 1fr;
+  grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -219,7 +224,7 @@
 
 .ruta-informacion {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 22px;
   padding-top: 16px;
@@ -230,6 +235,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .ruta-informacion span,
@@ -246,6 +252,64 @@
 
 /* =========================================================
    CONDUCTOR
+   ========================================================= */
+
+.tarjeta-conductor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 17px;
+}
+
+.avatar-ruta {
+  display: block;
+  flex: 0 0 64px;
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+  height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  overflow: hidden;
+  background: #e9f6f4;
+  box-sizing: border-box;
+}
+
+.avatar-ruta.avatar-inicial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--verde, #0a9a8f);
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.datos-conductor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.datos-conductor strong {
+  overflow-wrap: anywhere;
+  color: var(--azul-oscuro, #073b68);
+  font-size: 14px;
+}
+
+.datos-conductor span {
+  color: #8a99a8;
+  font-size: 12px;
+}
+
+/* =========================================================
+   CONDUCTOR - ESTILO COMPLEMENTARIO
    ========================================================= */
 
 .ruta-conductor {
@@ -348,12 +412,39 @@
 }
 
 /* =========================================================
+   MINI MAPA DE LAS TARJETAS
+   ========================================================= */
+
+.mini-mapa-tarjeta {
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.mini-mapa-sin-datos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100px;
+  padding: 15px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* =========================================================
    RESPONSIVE
    ========================================================= */
 
 @media (max-width: 900px) {
   .buscador-rutas {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .boton-limpiar {
@@ -385,6 +476,10 @@
     gap: 5px;
   }
 
+  .tarjeta-ruta {
+    padding: 17px;
+  }
+
   .ruta-principal {
     grid-template-columns: 1fr;
     gap: 9px;
@@ -395,32 +490,20 @@
   }
 
   .ruta-informacion {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ruta-informacion div:last-child {
     grid-column: 1 / -1;
   }
-}
-/* Mini mapa de las tarjetas de búsqueda */
-.mini-mapa-tarjeta {
-  width: 100%;
-  height: 180px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #f1f5f9;
-}
 
-.mini-mapa-sin-datos {
-  width: 100%;
-  min-height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 15px;
-  border-radius: 12px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 13px;
-  text-align: center;
+  .avatar-ruta {
+    flex-basis: 56px;
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+  }
 }

@@ -689,9 +689,8 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
         {!cargando && !error && rutas.length > 0 && (
           <div className="lista-rutas">
             {rutasOrdenadas.map((ruta, indice) => {
-              const estado = obtenerEstado(ruta);
               const cuposTotales = obtenerCuposTotales(ruta);
-              const cuposDisponibles = obtenerCuposDisponibles(ruta);
+
               const reservasRuta = reservas.filter(
                 (solicitud) =>
                   String(obtenerIdRutaSolicitud(solicitud)) ===
@@ -701,10 +700,18 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
               const reservasAceptadas = reservasRuta.filter(esReservaAceptada);
 
               const cuposOcupados = reservasAceptadas.length;
+
               const cuposDisponiblesCalculados = Math.max(
                 cuposTotales - cuposOcupados,
                 0
               );
+
+              const cuposDisponibles = cuposDisponiblesCalculados;
+
+              const estado = obtenerEstado({
+                ...ruta,
+                cupos_disponibles: cuposDisponibles,
+              });
 
               return (
                 <article className="tarjeta-ruta" key={ruta.id || `${ruta.origen}-${ruta.destino}-${indice}`}>

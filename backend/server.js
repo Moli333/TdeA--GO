@@ -1384,14 +1384,35 @@ app.post("/api/rutas", async (req, res) => {
       });
     }
 
-    // Determinar la clasificación tarifaria del vehículo.
-    const tipoTarifa =
-      vehiculoConductor.tipo === "Otro"
-        ? vehiculoConductor.clasificacion_tarifa
-        : vehiculoConductor.tipo === "Camioneta"
-          ? "Automóvil"
-          : vehiculoConductor.tipo;
+    // Determinar automáticamente la clasificación tarifaria
+    // a partir del vehículo registrado por el conductor.
+    const tipoVehiculo = String(
+      vehiculoConductor.tipo || ""
+    ).trim().toLowerCase();
 
+    const clasificacionRegistrada = String(
+      vehiculoConductor.clasificacion_tarifa || ""
+    ).trim().toLowerCase();
+
+    let tipoTarifa;
+
+    if (tipoVehiculo === "otro") {
+      tipoTarifa =
+        clasificacionRegistrada === "automóvil" ||
+          clasificacionRegistrada === "automovil"
+          ? "Automóvil"
+          : clasificacionRegistrada === "motocicleta"
+            ? "Motocicleta"
+            : null;
+    } else if (
+      ["automóvil", "automovil", "camioneta"].includes(tipoVehiculo)
+    ) {
+      tipoTarifa = "Automóvil";
+    } else if (tipoVehiculo === "motocicleta") {
+      tipoTarifa = "Motocicleta";
+    } else {
+      tipoTarifa = null;
+    }
     if (
       tipoTarifa !== "Automóvil" &&
       tipoTarifa !== "Motocicleta"
@@ -1983,7 +2004,9 @@ app.get(
               destino,
               fecha_hora_salida,
               distancia_km,
-              duracion_minutos
+              duracion_minutos,
+              tarifa_contribucion,
+              tarifa_sugerida
             )
           `)
           .in("viaje_id", rutaIds)

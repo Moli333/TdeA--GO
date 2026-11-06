@@ -1210,6 +1210,8 @@ app.get("/api/rutas", async (req, res) => {
         fecha_hora_salida,
         cupos_totales,
         cupos_disponibles,
+        distancia_km,
+        duracion_minutos,
         tarifa_contribucion,
         tarifa_sugerida,
         estado,
@@ -1246,6 +1248,8 @@ app.get("/api/rutas", async (req, res) => {
       hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
       cupos_totales: ruta.cupos_totales,
       cupos_disponibles: ruta.cupos_disponibles,
+      distancia_km: ruta.distancia_km,
+      duracion_minutos: ruta.duracion_minutos,
       tarifa_contribucion: ruta.tarifa_contribucion,
       tarifa_sugerida: ruta.tarifa_sugerida,
       estado: ruta.estado,
@@ -1289,7 +1293,15 @@ app.post("/api/rutas", async (req, res) => {
       cupos_totales,
       cupos,
       distancia_km,
+      duracion_minutos,
     } = req.body;
+
+    const duracionMinutos = Number(duracion_minutos);
+
+    const duracionValida =
+      Number.isFinite(duracionMinutos) && duracionMinutos > 0
+        ? Math.ceil(duracionMinutos)
+        : null;
 
     const idConductor =
       conductor_id || id_conductor || user_id;
@@ -1446,6 +1458,7 @@ app.post("/api/rutas", async (req, res) => {
         cupos_totales: totalCupos,
         cupos_disponibles: totalCupos,
         distancia_km: distanciaKm,
+        duracion_minutos: duracionValida,
         tarifa_sugerida: aporteSugerido,
         tarifa_contribucion: aporteSugerido,
         estado: "programado",
@@ -1507,7 +1520,10 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
         fecha_hora_salida,
         cupos_totales,
         cupos_disponibles,
+        distancia_km,
+        duracion_minutos,
         tarifa_contribucion,
+        tarifa_sugerida,
         estado,
         conductor_id,
         creado_en
@@ -1963,10 +1979,12 @@ app.get(
               foto_url
             ),
             ruta:rutas!solicitudes_viaje_viaje_id_fkey (
-            origen,
-            destino,
-            fecha_hora_salida
-          )
+              origen,
+              destino,
+              fecha_hora_salida,
+              distancia_km,
+              duracion_minutos
+            )
           `)
           .in("viaje_id", rutaIds)
           .order("fecha_solicitud", { ascending: false });

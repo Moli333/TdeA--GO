@@ -413,6 +413,27 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                           <strong>{ruta.destino || "No disponible"}</strong>
                         </div>
                       </div>
+
+                      <div className="solicitud-nueva-ubicaciones">
+                        <div>
+                          <small>DISTANCIA</small>
+                          <strong>
+                            {Number(ruta.distancia_km) > 0
+                              ? `${Number(ruta.distancia_km).toLocaleString("es-CO", {
+                                maximumFractionDigits: 1,
+                              })} km`
+                              : "No disponible"}
+                          </strong>
+                        </div>
+                        <div>
+                          <small>DURACIÓN ESTIMADA</small>
+                          <strong>
+                            {Number(ruta.duracion_minutos) > 0
+                              ? `${Math.ceil(Number(ruta.duracion_minutos))} min`
+                              : "No disponible"}
+                          </strong>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="solicitud-nueva-pasajero">
@@ -721,6 +742,25 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                     <div className="dato-ruta">
                       <span className="dato-etiqueta">HORA</span>
                       <strong>{obtenerHora(ruta.fecha_hora_salida || ruta.fechaHoraSalida || ruta.fecha_salida)}</strong>
+                    </div>
+                    <div className="dato-ruta">
+                      <span className="dato-etiqueta">DISTANCIA</span>
+                      <strong>
+                        {Number(ruta.distancia_km) > 0
+                          ? `${Number(ruta.distancia_km).toLocaleString("es-CO", {
+                            maximumFractionDigits: 1,
+                          })} km`
+                          : "No disponible"}
+                      </strong>
+                    </div>
+
+                    <div className="dato-ruta">
+                      <span className="dato-etiqueta">DURACIÓN ESTIMADA</span>
+                      <strong>
+                        {Number(ruta.duracion_minutos) > 0
+                          ? `${Math.ceil(Number(ruta.duracion_minutos))} min`
+                          : "No disponible"}
+                      </strong>
                     </div>
                     <div className="dato-ruta">
                       <span className="dato-etiqueta">CUPOS</span>

@@ -1190,6 +1190,7 @@ app.delete(
     }
   }
 );
+
 // ------------------------------------------------------------------
 // 8. CONSULTAR RUTAS DISPONIBLES
 // GET /api/rutas
@@ -1197,10 +1198,12 @@ app.delete(
 
 app.get("/api/rutas", async (req, res) => {
   try {
+    // Consultar rutas y datos públicos del conductor.
     const { data, error } = await dbClient
       .from("rutas")
       .select(`
         id,
+        vehiculo_id,
         origen,
         destino,
         lat_origen,
@@ -1227,47 +1230,152 @@ app.get("/api/rutas", async (req, res) => {
       `)
       .order("fecha_hora_salida", { ascending: true });
 
-    if (error) {
-      console.error("Error de Supabase en /api/rutas:", error);
-      return res.status(500).json({
-        mensaje: "No fue posible consultar las rutas.",
-        detalle: error.message
-      });
+    if (error) throw error;
+
+    const listaRutas = data || [];
+
+    if (listaRutas.length === 0) {
+      return res.json([]);
     }
 
-    const rutas = (data || []).map((ruta) => ({
-      id: ruta.id,
-      origen: ruta.origen,
-      destino: ruta.destino,
-      lat_origen: ruta.lat_origen,
-      lng_origen: ruta.lng_origen,
-      lat_destino: ruta.lat_destino,
-      lng_destino: ruta.lng_destino,
-      fecha_hora_salida: ruta.fecha_hora_salida,
-      fecha: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(0, 10) : "",
-      hora: ruta.fecha_hora_salida ? String(ruta.fecha_hora_salida).slice(11, 16) : "",
-      cupos_totales: ruta.cupos_totales,
-      cupos_disponibles: ruta.cupos_disponibles,
-      distancia_km: ruta.distancia_km,
-      duracion_minutos: ruta.duracion_minutos,
-      tarifa_contribucion: ruta.tarifa_contribucion,
-      tarifa_sugerida: ruta.tarifa_sugerida,
-      estado: ruta.estado,
-      conductor_id: ruta.conductor_id,
-      conductor: ruta.profiles || null,
-      vehiculo: null, // Evita errores de columnas inexistentes
-      creado_en: ruta.creado_en,
-    }));
+    const conductorIds = [
+      ...new Set(listaRutas.map((ruta) => ruta.conductor_id).filter(Boolean))
+    ];
 
-    res.json(rutas);
+    const rutaIds = listaRutas.map((ruta) => ruta.id);
+
+    // Consultar los vehículos registrados por los conductores.
+    const { data: vehiculos, error: errorVehiculos } = await dbClient
+      .from("vehiculos")
+      .select(`
+        id,
+        usuario_id,
+        tipo,
+        clasificacion_tarifa,
+        marca_modelo,
+        placa,
+        color,
+        capacidad_maxima
+      `)
+      .in("usuario_id", conductorIds);
+
+    if (errorVehiculos) throw errorVehiculos;
+
+    const vehiculosPorConductor = {};
+
+    (vehiculos || []).forEach((vehiculo) => {
+      vehiculosPorConductor[String(vehiculo.usuario_id)] = vehiculo;
+    });
+
+    // Consultar reservas y mostrar únicamente las aceptadas.
+    const { data: solicitudes, error: errorSolicitudes } = await dbClient
+      .from("solicitudes_viaje")
+      .select(`
+        id,
+        viaje_id,
+        pasajero_id,
+        estado,
+        tarifa_acordada,
+        tarifa_sugerida,
+        pasajero:profiles!solicitudes_viaje_pasajero_id_fkey (
+          id,
+          nombre_completo,
+          foto_url,
+          verificado
+        )
+      `)
+      .in("viaje_id", rutaIds);
+
+    if (errorSolicitudes) throw errorSolicitudes;
+
+    const estadosAceptados = [
+      "aceptada",
+      "aceptado",
+      "aprobada",
+      "aprobado"
+    ];
+
+    const reservasPorRuta = {};
+
+    (solicitudes || []).forEach((solicitud) => {
+      const estado = String(solicitud.estado || "")
+        .trim()
+        .toLowerCase();
+
+      if (!estadosAceptados.includes(estado)) return;
+
+      const rutaId = String(solicitud.viaje_id);
+
+      if (!reservasPorRuta[rutaId]) {
+        reservasPorRuta[rutaId] = [];
+      }
+
+      reservasPorRuta[rutaId].push(solicitud);
+    });
+
+    // Preparar la información completa de cada ruta.
+    const rutas = listaRutas.map((ruta) => {
+      const reservasAceptadas =
+        reservasPorRuta[String(ruta.id)] || [];
+
+      return {
+        id: ruta.id,
+        vehiculo_id: ruta.vehiculo_id,
+        origen: ruta.origen,
+        destino: ruta.destino,
+        lat_origen: ruta.lat_origen,
+        lng_origen: ruta.lng_origen,
+        lat_destino: ruta.lat_destino,
+        lng_destino: ruta.lng_destino,
+        fecha_hora_salida: ruta.fecha_hora_salida,
+        fecha: ruta.fecha_hora_salida
+          ? String(ruta.fecha_hora_salida).slice(0, 10)
+          : "",
+        hora: ruta.fecha_hora_salida
+          ? String(ruta.fecha_hora_salida).slice(11, 16)
+          : "",
+        cupos_totales: ruta.cupos_totales,
+        cupos_disponibles: ruta.cupos_disponibles,
+        cupos_ocupados: reservasAceptadas.length,
+        distancia_km: ruta.distancia_km,
+        duracion_minutos: ruta.duracion_minutos,
+        tarifa_contribucion: ruta.tarifa_contribucion,
+        tarifa_sugerida: ruta.tarifa_sugerida,
+        estado: ruta.estado,
+        conductor_id: ruta.conductor_id,
+        conductor: ruta.profiles
+          ? {
+            ...ruta.profiles,
+            telefono:
+              usuarioAutenticado &&
+                reservasAceptadas.some(
+                  (reserva) =>
+                    String(reserva.pasajero_id) ===
+                    String(usuarioAutenticado.id)
+                )
+                ? ruta.profiles.telefono
+                : null
+          }
+          : null,
+        vehiculo:
+          vehiculosPorConductor[String(ruta.conductor_id)] || null,
+        reservas_aceptadas: reservasAceptadas,
+        creado_en: ruta.creado_en
+      };
+    });
+
+    return res.json(rutas);
+
   } catch (error) {
     console.error("Error obteniendo rutas:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       mensaje: "No fue posible consultar las rutas.",
       detalle: error.message
     });
   }
 });
+
 // ------------------------------------------------------------------
 // 9. PUBLICAR RUTA
 // POST /api/rutas
@@ -1275,6 +1383,21 @@ app.get("/api/rutas", async (req, res) => {
 
 app.post("/api/rutas", async (req, res) => {
   try {
+    const encabezado = req.headers.authorization || "";
+    const token = encabezado.startsWith("Bearer ")
+      ? encabezado.substring(7)
+      : null;
+
+    let usuarioAutenticado = null;
+
+    if (token) {
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser(token);
+
+      if (!authError && authData.user) {
+        usuarioAutenticado = authData.user;
+      }
+    }
     console.log("BODY RECIBIDO EN /api/rutas:", req.body);
 
     const {

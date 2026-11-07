@@ -38,7 +38,7 @@ function MiCuenta({
   const esAdministrador = rolActual === "administrador";
 
   const nombreRol = esAdministrador
-    ? "Administradora"
+    ? "Administrador"
     : esConductor
       ? "Conductor"
       : "Pasajero";

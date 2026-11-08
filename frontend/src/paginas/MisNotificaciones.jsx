@@ -16,9 +16,13 @@ export default function MisNotificaciones({ usuario, API_URL }) {
 
       try {
         const respuesta = await fetch(
-          `${API_URL}/api/notificaciones/${encodeURIComponent(idUsuario)}`
+          `${API_URL}/api/notificaciones/${encodeURIComponent(idUsuario)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${usuario.token || usuario.access_token}`,
+            },
+          }
         );
-
         const datos = await respuesta.json();
 
         if (!respuesta.ok) {
@@ -50,6 +54,9 @@ export default function MisNotificaciones({ usuario, API_URL }) {
     try {
       const respuesta = await fetch(`${API_URL}/api/notificaciones/${id}/leida`, {
         method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${usuario.token || usuario.access_token}`,
+        },
       });
 
       if (respuesta.ok) {

@@ -2323,55 +2323,91 @@ app.get(
   }
 );
 
-// ------------------------------------------------------------------
+// ============================================
 // NOTIFICACIONES
-// ------------------------------------------------------------------
+// ============================================
 
-// Consultar notificaciones de un usuario
-app.get("/api/notificaciones/:usuario_id", async (req, res) => {
-  try {
-    const { usuario_id } = req.params;
+// Consultar las notificaciones del usuario autenticado
+app.get(
+  "/api/notificaciones/:usuario_id",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { usuario_id } = req.params;
+      const usuarioAutenticado = req.usuarioAutenticado;
 
-    if (!usuario_id) {
-      return res.status(400).json({ mensaje: "Falta el ID de usuario." });
+      // Cada usuario solo puede consultar sus propias notificaciones
+      if (usuarioAutenticado.id !== usuario_id) {
+        return res.status(403).json({
+          error: "No tienes permiso para consultar estas notificaciones.",
+        });
+      }
+
+      const { data, error } = await dbClient
+        .from("notificaciones")
+        .select("*")
+        .eq("usuario_id", usuario_id)
+        .order("fecha_creacion", { ascending: false });
+
+      if (error) {
+        console.error("Error consultando notificaciones:", error);
+        return res.status(500).json({
+          error: "No fue posible consultar las notificaciones.",
+        });
+      }
+
+      return res.json(data || []);
+    } catch (error) {
+      console.error("Error en GET /api/notificaciones:", error);
+      return res.status(500).json({
+        error: "Error interno al consultar las notificaciones.",
+      });
     }
-
-    const { data, error } = await dbClient
-      .from("notificaciones")
-      .select("*")
-      .eq("usuario_id", usuario_id)
-      .order("fecha_creacion", { ascending: false });
-
-    if (error) throw error;
-
-    res.json(data || []);
-  } catch (error) {
-    console.error("Error obteniendo notificaciones:", error);
-    res.status(500).json({ mensaje: "No fue posible consultar las notificaciones." });
   }
-});
+);
 
-// Marcar notificación como leída
-app.patch("/api/notificaciones/:id/leida", async (req, res) => {
-  try {
-    const { id } = req.params;
+// Marcar una notificación como leída
+app.patch(
+  "/api/notificaciones/:id/leida",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const usuarioAutenticado = req.usuarioAutenticado;
 
-    const { data, error } = await dbClient
-      .from("notificaciones")
-      .update({ leida: true })
-      .eq("id", id)
-      .select()
-      .single();
+      const { data, error } = await dbClient
+        .from("notificaciones")
+        .update({ leida: true })
+        .eq("id", id)
+        .eq("usuario_id", usuarioAutenticado.id)
+        .select()
+        .maybeSingle();
 
-    if (error) throw error;
+      if (error) {
+        console.error("Error marcando notificación como leída:", error);
+        return res.status(500).json({
+          error: "No fue posible actualizar la notificación.",
+        });
+      }
 
-    res.json({ mensaje: "Notificación marcada como leída.", notificacion: data });
-  } catch (error) {
-    console.error("Error actualizando notificación:", error);
-    res.status(500).json({ mensaje: "No fue posible actualizar la notificación." });
+      if (!data) {
+        return res.status(404).json({
+          error: "La notificación no existe o no te pertenece.",
+        });
+      }
+
+      return res.json({
+        mensaje: "Notificación marcada como leída.",
+        notificacion: data,
+      });
+    } catch (error) {
+      console.error("Error en PATCH /api/notificaciones:", error);
+      return res.status(500).json({
+        error: "Error interno al actualizar la notificación.",
+      });
+    }
   }
-});
-
+);
 // ------------------------------------------------------------------
 // 13. CREAR SOLICITUD DE VIAJE NUEVO
 // POST /api/solicitudes-viajes-nuevos

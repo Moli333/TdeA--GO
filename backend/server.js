@@ -2323,6 +2323,7 @@ app.get(
   }
 );
 
+
 // ============================================
 // NOTIFICACIONES
 // ============================================
@@ -2343,6 +2344,7 @@ app.get(
         });
       }
 
+      // Consultar notificaciones
       const { data, error } = await dbClient
         .from("notificaciones")
         .select("*")
@@ -2352,19 +2354,124 @@ app.get(
       if (error) {
         console.error("Error consultando notificaciones:", error);
         return res.status(500).json({
-          error: "No fue posible consultar las notificaciones.",
+          mensaje: "No fue posible consultar las notificaciones.",
         });
       }
 
-      return res.json(data || []);
+      const notificaciones = data || [];
+
+      // Separar los identificadores según el tipo de solicitud
+      const idsCupos = [
+        ...new Set(
+          notificaciones
+            .filter(
+              (n) =>
+                n.tipo_evento === "cupo_pendiente" ||
+                n.tipo_evento === "cupo_respuesta"
+            )
+            .map((n) => n.solicitud_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      const idsViajesNuevos = [
+        ...new Set(
+          notificaciones
+            .filter(
+              (n) =>
+                n.tipo_evento === "viaje_nuevo_pendiente" ||
+                n.tipo_evento === "viaje_nuevo_respuesta"
+            )
+            .map((n) => n.solicitud_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      // Consultar estados reales de las solicitudes de cupo
+      let estadosCupos = {};
+
+      if (idsCupos.length > 0) {
+        const { data: solicitudesCupo, error: errorCupos } =
+          await dbClient
+            .from("solicitudes_viaje")
+            .select("id, estado")
+            .in("id", idsCupos);
+
+        if (errorCupos) {
+          console.error("Error consultando estados de cupos:", errorCupos);
+          return res.status(500).json({
+            mensaje: "No fue posible consultar los estados de las solicitudes.",
+          });
+        }
+
+        estadosCupos = Object.fromEntries(
+          (solicitudesCupo || []).map((s) => [s.id, s.estado])
+        );
+      }
+
+      // Consultar estados reales de las solicitudes de viajes nuevos
+      let estadosViajesNuevos = {};
+
+      if (idsViajesNuevos.length > 0) {
+        const { data: solicitudesViajeNuevo, error: errorViajes } =
+          await dbClient
+            .from("solicitudes_viajes_nuevos")
+            .select("id, estado")
+            .in("id", idsViajesNuevos);
+
+        if (errorViajes) {
+          console.error(
+            "Error consultando estados de viajes nuevos:",
+            errorViajes
+          );
+
+          return res.status(500).json({
+            mensaje: "No fue posible consultar los estados de las solicitudes.",
+          });
+        }
+
+        estadosViajesNuevos = Object.fromEntries(
+          (solicitudesViajeNuevo || []).map((s) => [s.id, s.estado])
+        );
+      }
+
+      // Incorporar el estado real sin modificar el estado de lectura
+      const resultado = notificaciones.map((notificacion) => {
+        let estadoSolicitud = null;
+
+        if (
+          notificacion.tipo_evento === "cupo_pendiente" ||
+          notificacion.tipo_evento === "cupo_respuesta"
+        ) {
+          estadoSolicitud =
+            estadosCupos[notificacion.solicitud_id] || null;
+        }
+
+        if (
+          notificacion.tipo_evento === "viaje_nuevo_pendiente" ||
+          notificacion.tipo_evento === "viaje_nuevo_respuesta"
+        ) {
+          estadoSolicitud =
+            estadosViajesNuevos[notificacion.solicitud_id] || null;
+        }
+
+        return {
+          ...notificacion,
+          estado_solicitud: estadoSolicitud,
+        };
+      });
+
+      return res.json(resultado);
     } catch (error) {
       console.error("Error en GET /api/notificaciones:", error);
+
       return res.status(500).json({
-        error: "Error interno al consultar las notificaciones.",
+        mensaje: "Error interno al consultar las notificaciones.",
       });
     }
   }
 );
+
 
 // Marcar una notificación como leída
 app.patch(

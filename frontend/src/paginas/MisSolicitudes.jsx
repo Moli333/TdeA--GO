@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import "./MisSolicitudes.css";
 
@@ -7,12 +8,17 @@ function MisSolicitudes({ usuario, API_URL }) {
   const [error, setError] = useState("");
 
   // =========================================================
-  // OBTENER ID DEL USUARIO
+  // OBTENER ID Y TOKEN DEL USUARIO
   // =========================================================
 
   const idUsuario =
     usuario?.id ||
     usuario?.id_usuario ||
+    null;
+
+  const token =
+    usuario?.token ||
+    usuario?.access_token ||
     null;
 
   // =========================================================
@@ -23,8 +29,15 @@ function MisSolicitudes({ usuario, API_URL }) {
     if (!idUsuario) {
       setSolicitudes([]);
       setCargando(false);
+      setError("No fue posible identificar al usuario.");
+      return;
+    }
+
+    if (!token) {
+      setSolicitudes([]);
+      setCargando(false);
       setError(
-        "No fue posible identificar al usuario."
+        "No se encontró el token de sesión. Cierra sesión e ingresa nuevamente."
       );
       return;
     }
@@ -34,7 +47,14 @@ function MisSolicitudes({ usuario, API_URL }) {
 
     try {
       const respuesta = await fetch(
-        `${API_URL}/api/solicitudes/pasajero/${idUsuario}`
+        `${API_URL}/api/solicitudes/pasajero/${encodeURIComponent(idUsuario)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       const datos = await respuesta.json();
@@ -42,14 +62,12 @@ function MisSolicitudes({ usuario, API_URL }) {
       if (!respuesta.ok) {
         throw new Error(
           datos.mensaje ||
-            "No fue posible consultar tus solicitudes."
+          "No fue posible consultar tus solicitudes."
         );
       }
 
       setSolicitudes(
-        Array.isArray(datos)
-          ? datos
-          : []
+        Array.isArray(datos) ? datos : []
       );
     } catch (error) {
       console.error(
@@ -59,7 +77,7 @@ function MisSolicitudes({ usuario, API_URL }) {
 
       setError(
         error.message ||
-          "No fue posible cargar tus solicitudes."
+        "Error al cargar las solicitudes."
       );
     } finally {
       setCargando(false);
@@ -71,8 +89,65 @@ function MisSolicitudes({ usuario, API_URL }) {
   // =========================================================
 
   useEffect(() => {
-    cargarSolicitudes();
-  }, [idUsuario]);
+    let cancelado = false;
+
+    const consultar = async () => {
+      if (!idUsuario || !token) {
+        setSolicitudes([]);
+        setError(
+          !idUsuario
+            ? "No fue posible identificar al usuario."
+            : "No se encontró el token de sesión."
+        );
+        setCargando(false);
+        return;
+      }
+
+      try {
+        const respuesta = await fetch(
+          `${API_URL}/api/solicitudes/pasajero/${encodeURIComponent(idUsuario)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos.mensaje ||
+            "No fue posible consultar tus solicitudes."
+          );
+        }
+
+        if (!cancelado) {
+          setSolicitudes(Array.isArray(datos) ? datos : []);
+          setError("");
+        }
+      } catch (error) {
+        if (!cancelado) {
+          console.error("Error cargando solicitudes:", error);
+          setError(
+            error.message || "Error al cargar las solicitudes."
+          );
+        }
+      } finally {
+        if (!cancelado) {
+          setCargando(false);
+        }
+      }
+    };
+
+    void consultar();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [idUsuario, token, API_URL]);
 
   // =========================================================
   // FORMATEAR FECHA Y HORA
@@ -89,14 +164,11 @@ function MisSolicitudes({ usuario, API_URL }) {
       return "Fecha no disponible";
     }
 
-    return fecha.toLocaleDateString(
-      "es-CO",
-      {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }
-    );
+    return fecha.toLocaleDateString("es-CO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
 
   const formatearHora = (fechaHora) => {
@@ -110,14 +182,11 @@ function MisSolicitudes({ usuario, API_URL }) {
       return "Hora no disponible";
     }
 
-    return fecha.toLocaleTimeString(
-      "es-CO",
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }
-    );
+    return fecha.toLocaleTimeString("es-CO", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   };
 
   // =========================================================
@@ -132,11 +201,7 @@ function MisSolicitudes({ usuario, API_URL }) {
       cancelada: "Cancelada",
     };
 
-    return (
-      estados[estado] ||
-      estado ||
-      "Sin estado"
-    );
+    return estados[estado] || estado || "Sin estado";
   };
 
   // =========================================================
@@ -145,24 +210,17 @@ function MisSolicitudes({ usuario, API_URL }) {
 
   const obtenerClaseEstado = (estado) => {
     const estados = {
-      pendiente:
-        "estado-solicitud pendiente",
-      aceptada:
-        "estado-solicitud aceptada",
-      rechazada:
-        "estado-solicitud rechazada",
-      cancelada:
-        "estado-solicitud cancelada",
+      pendiente: "estado-solicitud pendiente",
+      aceptada: "estado-solicitud aceptada",
+      rechazada: "estado-solicitud rechazada",
+      cancelada: "estado-solicitud cancelada",
     };
 
-    return (
-      estados[estado] ||
-      "estado-solicitud"
-    );
+    return estados[estado] || "estado-solicitud";
   };
 
   // =========================================================
-  // FOTO DEL CONDUCTOR
+  // INICIALES DEL CONDUCTOR
   // =========================================================
 
   const obtenerIniciales = (nombre) => {
@@ -170,13 +228,10 @@ function MisSolicitudes({ usuario, API_URL }) {
       return "C";
     }
 
-    const palabras =
-      nombre.trim().split(/\s+/);
+    const palabras = nombre.trim().split(/\s+/);
 
     if (palabras.length === 1) {
-      return palabras[0]
-        .charAt(0)
-        .toUpperCase();
+      return palabras[0].charAt(0).toUpperCase();
     }
 
     return (
@@ -191,15 +246,11 @@ function MisSolicitudes({ usuario, API_URL }) {
 
   return (
     <section className="pagina-servicio solicitudes-pagina">
-
       <div className="contenedor">
 
-        {/* =================================================
-            ENCABEZADO
-            ================================================= */}
+        {/* ENCABEZADO */}
 
         <div className="encabezado-servicio">
-
           <div>
             <span className="etiqueta-verde">
               PASAJERO
@@ -219,36 +270,24 @@ function MisSolicitudes({ usuario, API_URL }) {
             onClick={cargarSolicitudes}
             disabled={cargando}
           >
-            {cargando
-              ? "Actualizando..."
-              : "Actualizar"}
+            {cargando ? "Actualizando..." : "Actualizar"}
           </button>
-
         </div>
 
-        {/* =================================================
-            CARGANDO
-            ================================================= */}
+        {/* CARGANDO */}
 
         {cargando && (
           <div className="estado-carga-solicitudes">
-
             <div className="indicador-carga"></div>
 
-            <p>
-              Cargando tus solicitudes...
-            </p>
-
+            <p>Cargando tus solicitudes...</p>
           </div>
         )}
 
-        {/* =================================================
-            ERROR
-            ================================================= */}
+        {/* ERROR */}
 
         {!cargando && error && (
           <div className="mensaje-error-solicitudes">
-
             <strong>
               No fue posible cargar las solicitudes
             </strong>
@@ -262,117 +301,82 @@ function MisSolicitudes({ usuario, API_URL }) {
             >
               Intentar nuevamente
             </button>
-
           </div>
         )}
 
-        {/* =================================================
-            SIN SOLICITUDES
-            ================================================= */}
+        {/* SIN SOLICITUDES */}
 
         {!cargando &&
           !error &&
           solicitudes.length === 0 && (
             <div className="sin-solicitudes">
-
               <div className="icono-sin-solicitudes">
                 <span>✓</span>
               </div>
 
-              <h2>
-                Aún no tienes solicitudes
-              </h2>
+              <h2>Aún no tienes solicitudes</h2>
 
               <p>
-                Cuando solicites un cupo en una
-                ruta, podrás consultar aquí su
-                información y estado.
+                Cuando solicites un cupo en una ruta,
+                podrás consultar aquí su información y estado.
               </p>
-
             </div>
           )}
 
-        {/* =================================================
-            LISTADO
-            ================================================= */}
+        {/* LISTADO */}
 
         {!cargando &&
           !error &&
           solicitudes.length > 0 && (
             <div className="lista-solicitudes">
-
               {solicitudes.map((solicitud) => {
-
-                const ruta =
-                  solicitud.rutas ||
-                  {};
-
-                const conductor =
-                  ruta.profiles ||
-                  null;
+                const ruta = solicitud.rutas || {};
+                const conductor = ruta.profiles || null;
 
                 const estado =
-                  solicitud.estado ||
-                  "pendiente";
+                  solicitud.estado || "pendiente";
 
                 return (
                   <article
                     className="tarjeta-solicitud"
                     key={solicitud.id}
                   >
-
-                    {/* =====================================
-                        CABECERA DE LA SOLICITUD
-                        ===================================== */}
+                    {/* CABECERA */}
 
                     <div className="cabecera-tarjeta-solicitud">
-
                       <div>
-
                         <span className="numero-solicitud">
                           Solicitud
                         </span>
 
                         <h2>
-                          {ruta.origen ||
-                            "Origen no disponible"}
+                          {ruta.origen || "Origen no disponible"}
+
                           <span className="separador-ruta">
                             →
                           </span>
-                          {ruta.destino ||
-                            "Destino no disponible"}
-                        </h2>
 
+                          {ruta.destino || "Destino no disponible"}
+                        </h2>
                       </div>
 
                       <span
-                        className={obtenerClaseEstado(
-                          estado
-                        )}
+                        className={obtenerClaseEstado(estado)}
                       >
-                        {obtenerTextoEstado(
-                          estado
-                        )}
+                        {obtenerTextoEstado(estado)}
                       </span>
-
                     </div>
 
-                    {/* =====================================
-                        INFORMACIÓN DEL VIAJE
-                        ===================================== */}
+                    {/* INFORMACIÓN DEL VIAJE */}
 
                     <div className="informacion-solicitud">
-
                       <div className="dato-solicitud">
-
                         <span className="icono-dato">
                           Fecha
                         </span>
 
                         <div>
-                          <small>
-                            Fecha de salida
-                          </small>
+                          <small>Fecha de salida</small>
 
                           <strong>
                             {formatearFecha(
@@ -380,19 +384,15 @@ function MisSolicitudes({ usuario, API_URL }) {
                             )}
                           </strong>
                         </div>
-
                       </div>
 
                       <div className="dato-solicitud">
-
                         <span className="icono-dato">
                           Hora
                         </span>
 
                         <div>
-                          <small>
-                            Hora de salida
-                          </small>
+                          <small>Hora de salida</small>
 
                           <strong>
                             {formatearHora(
@@ -400,64 +400,48 @@ function MisSolicitudes({ usuario, API_URL }) {
                             )}
                           </strong>
                         </div>
-
                       </div>
 
                       <div className="dato-solicitud">
-
                         <span className="icono-dato">
                           Punto
                         </span>
 
                         <div>
-                          <small>
-                            Punto de encuentro
-                          </small>
+                          <small>Punto de encuentro</small>
 
                           <strong>
                             {solicitud.punto_encuentro ||
                               "No especificado"}
                           </strong>
                         </div>
-
                       </div>
-
                     </div>
 
-                    {/* =====================================
-                        CONDUCTOR
-                        ===================================== */}
+                    {/* CONDUCTOR */}
 
                     <div className="conductor-solicitud">
-
                       <div className="titulo-seccion-solicitud">
                         Conductor
                       </div>
 
                       <div className="datos-conductor-solicitud">
-
                         <div className="avatar-conductor-solicitud">
-
                           {conductor?.foto_url ? (
                             <img
-                              src={
-                                conductor.foto_url
-                              }
-                              alt={`Foto de ${
-                                conductor.nombre_completo ||
+                              src={conductor.foto_url}
+                              alt={`Foto de ${conductor.nombre_completo ||
                                 "conductor"
-                              }`}
+                                }`}
                             />
                           ) : (
                             obtenerIniciales(
                               conductor?.nombre_completo
                             )
                           )}
-
                         </div>
 
                         <div className="nombre-conductor-solicitud">
-
                           <strong>
                             {conductor?.nombre_completo ||
                               "Conductor no disponible"}
@@ -468,37 +452,25 @@ function MisSolicitudes({ usuario, API_URL }) {
                               Usuario verificado
                             </span>
                           )}
-
                         </div>
 
                         {conductor?.telefono && (
                           <div className="telefono-conductor-solicitud">
-
-                            <small>
-                              Teléfono
-                            </small>
+                            <small>Teléfono</small>
 
                             <strong>
                               {conductor.telefono}
                             </strong>
-
                           </div>
                         )}
-
                       </div>
-
                     </div>
 
-                    {/* =====================================
-                        DETALLES DE CUPOS
-                        ===================================== */}
+                    {/* DETALLES DE CUPOS */}
 
                     <div className="detalle-cupos-solicitud">
-
                       <div>
-                        <small>
-                          Cupos disponibles
-                        </small>
+                        <small>Cupos disponibles</small>
 
                         <strong>
                           {ruta.cupos_disponibles ??
@@ -507,9 +479,7 @@ function MisSolicitudes({ usuario, API_URL }) {
                       </div>
 
                       <div>
-                        <small>
-                          Cupos totales
-                        </small>
+                        <small>Cupos totales</small>
 
                         <strong>
                           {ruta.cupos_totales ??
@@ -518,9 +488,7 @@ function MisSolicitudes({ usuario, API_URL }) {
                       </div>
 
                       <div>
-                        <small>
-                          Solicitud realizada
-                        </small>
+                        <small>Solicitud realizada</small>
 
                         <strong>
                           {formatearFecha(
@@ -528,18 +496,13 @@ function MisSolicitudes({ usuario, API_URL }) {
                           )}
                         </strong>
                       </div>
-
                     </div>
-
                   </article>
                 );
               })}
-
             </div>
           )}
-
       </div>
-
     </section>
   );
 }

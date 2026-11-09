@@ -5,6 +5,7 @@ export default function MisNotificaciones({ usuario, API_URL }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [accionesEnCurso, setAccionesEnCurso] = useState([]);
 
   const idUsuario = usuario?.id || usuario?.id_usuario;
   const token = usuario?.token || usuario?.access_token;
@@ -59,7 +60,6 @@ export default function MisNotificaciones({ usuario, API_URL }) {
 
     consultar();
 
-    // Actualiza los estados sin necesidad de salir de la pantalla.
     const intervalo = setInterval(consultar, 10000);
 
     return () => {
@@ -99,6 +99,59 @@ export default function MisNotificaciones({ usuario, API_URL }) {
     }
   };
 
+  const gestionarAccionCupo = async (notif, accion) => {
+    const solicitudId = notif.solicitud_id;
+
+    if (!solicitudId) {
+      setError(
+        "Esta notificación todavía no está vinculada a una solicitud. No se puede responder desde aquí."
+      );
+      return;
+    }
+
+    const tipo = notif.tipo_evento || "";
+    const esSolicitudViajeNuevo = tipo === "viaje_nuevo_pendiente";
+
+    const clave = notif.id;
+    setAccionesEnCurso((prev) => [...prev, clave]);
+    setError("");
+
+    try {
+      const url = esSolicitudViajeNuevo
+        ? `${API_URL}/api/solicitudes-viajes-nuevos/${encodeURIComponent(solicitudId)}/responder`
+        : `${API_URL}/api/solicitudes/${encodeURIComponent(solicitudId)}/responder`;
+
+      const respuesta = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          accion,
+          ...(esSolicitudViajeNuevo ? { conductor_id: idUsuario } : {}),
+        }),
+      });
+
+      const datos = await respuesta.json().catch(() => ({}));
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje ||
+          datos.error ||
+          "No fue posible responder la solicitud."
+        );
+      }
+
+      await consultarNotificaciones();
+    } catch (err) {
+      console.error("Error al responder la solicitud:", err);
+      setError(err.message || "No fue posible responder la solicitud.");
+    } finally {
+      setAccionesEnCurso((prev) => prev.filter((id) => id !== clave));
+    }
+  };
+
   const obtenerEstado = (estado) => {
     const normalizado = String(estado || "").toLowerCase().trim();
 
@@ -110,7 +163,11 @@ export default function MisNotificaciones({ usuario, API_URL }) {
       };
     }
 
-    if (["aceptada", "aceptado", "aprobada", "aprobado", "accepted"].includes(normalizado)) {
+    if (
+      ["aceptada", "aceptado", "aprobada", "aprobado", "accepted"].includes(
+        normalizado
+      )
+    ) {
       return {
         texto: "APROBADA",
         color: "#16834a",
@@ -127,6 +184,23 @@ export default function MisNotificaciones({ usuario, API_URL }) {
     }
 
     return null;
+  };
+
+  const esSolicitudPendiente = (notif) => {
+    const tipo = notif.tipo_evento || "";
+    const esTipoPendiente = [
+      "cupo_pendiente",
+      "viaje_nuevo_pendiente",
+    ].includes(tipo);
+
+    const estado = String(
+      notif.estado_solicitud || "pendiente"
+    ).toLowerCase();
+
+    return (
+      esTipoPendiente &&
+      ["pendiente", "pending"].includes(estado)
+    );
   };
 
   return (
@@ -176,7 +250,13 @@ export default function MisNotificaciones({ usuario, API_URL }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {notificaciones.map((notif) => {
-            const estado = obtenerEstado(notif.estado_solicitud);
+            const estado = obtenerEstado(
+              notif.estado_solicitud ||
+              (esSolicitudPendiente(notif) ? "pendiente" : "")
+            );
+
+            const esPendiente = esSolicitudPendiente(notif);
+            const procesando = accionesEnCurso.includes(notif.id);
 
             return (
               <div
@@ -257,6 +337,55 @@ export default function MisNotificaciones({ usuario, API_URL }) {
                       ? new Date(notif.fecha_creacion).toLocaleString("es-CO")
                       : ""}
                   </small>
+
+                  {esPendiente && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        marginTop: "12px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={procesando}
+                        onClick={() => gestionarAccionCupo(notif, "aceptar")}
+                        style={{
+                          background: "#16a765",
+                          color: "#fff",
+                          border: "none",
+                          padding: "7px 14px",
+                          borderRadius: "6px",
+                          cursor: procesando ? "wait" : "pointer",
+                          opacity: procesando ? 0.6 : 1,
+                          fontSize: "12px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {procesando ? "Procesando..." : "Aceptar"}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={procesando}
+                        onClick={() => gestionarAccionCupo(notif, "rechazar")}
+                        style={{
+                          background: "#d93838",
+                          color: "#fff",
+                          border: "none",
+                          padding: "7px 14px",
+                          borderRadius: "6px",
+                          cursor: procesando ? "wait" : "pointer",
+                          opacity: procesando ? 0.6 : 1,
+                          fontSize: "12px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {procesando ? "Procesando..." : "Rechazar"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {!notif.leida && (

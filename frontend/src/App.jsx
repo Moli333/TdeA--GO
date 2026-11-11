@@ -6,6 +6,8 @@ import SolicitarViajeNuevo from "./paginas/SolicitarViajeNuevo";
 import MisSolicitudesNuevas from "./paginas/MisSolicitudesNuevas";
 import MisNotificaciones from "./paginas/MisNotificaciones";
 import Administrador from "./pages/Administrador";
+import AlertaSolicitud from "./components/AlertaSolicitud";
+import useNotificacionesGlobales from "./hooks/useNotificacionesGlobales";
 
 import {
   BrowserRouter,
@@ -255,6 +257,22 @@ function Aplicacion() {
     );
   };
 
+  // Aviso cuando el sistema obliga a usar un rol por un viaje activo.
+  const [avisoCompromiso, setAvisoCompromiso] = useState(null);
+
+  const { resumen: resumenNotificaciones, refrescar: refrescarNotificaciones } =
+    useNotificacionesGlobales({
+      usuario,
+      API_URL,
+      alCambiarRol: (nuevoRol, compromiso) => {
+        actualizarUsuario({ rol: nuevoRol });
+        setAvisoCompromiso({ rol: nuevoRol, compromiso });
+        navegar(nuevoRol === "conductor" ? "/mis-rutas" : "/buscar");
+      },
+    });
+
+  const hayNotificacionesSinLeer = resumenNotificaciones.no_leidas > 0;
+
   const cerrarSesion = () => {
     localStorage.removeItem("tdea_go_usuario");
     sessionStorage.removeItem("tdea_go_usuario");
@@ -456,6 +474,28 @@ function Aplicacion() {
 
   return (
     <div className="app">
+      {avisoCompromiso && (
+        <div className="banner-compromiso" role="status">
+          Llegó la hora de tu viaje
+          {avisoCompromiso.compromiso
+            ? ` (${avisoCompromiso.compromiso.origen} → ${avisoCompromiso.compromiso.destino})`
+            : ""}
+          . Tu cuenta quedó en modo {avisoCompromiso.rol} hasta que lo cumplas.
+          <button type="button" onClick={() => setAvisoCompromiso(null)}>
+            Entendido
+          </button>
+        </div>
+      )}
+
+      {usuario && obtenerRolUsuario() === "conductor" && (
+        <AlertaSolicitud
+          alarmas={resumenNotificaciones.alarmas}
+          API_URL={API_URL}
+          token={usuario.token || usuario.access_token}
+          alResponder={refrescarNotificaciones}
+        />
+      )}
+
       <header className="encabezado">
         <div className="contenedor encabezado-contenido">
           <Link
@@ -517,6 +557,13 @@ function Aplicacion() {
                     {obtenerNombreUsuario()}
                   </span>
 
+                  {hayNotificacionesSinLeer && (
+                    <span
+                      className="punto-notificacion"
+                      aria-label="Tienes notificaciones sin leer"
+                    />
+                  )}
+
                   <span className="usuario-flecha">
                     {mostrarMenuUsuario ? "▲" : "▼"}
                   </span>
@@ -546,13 +593,41 @@ function Aplicacion() {
                       </Link>
                     )}
 
-                    <Link
-                      to="/buscar"
-                      className="opcion-menu-usuario"
-                      onClick={() => setMostrarMenuUsuario(false)}
-                    >
-                      Buscar ruta
-                    </Link>
+                    {esPasajero && (
+                      <>
+                        <Link
+                          to="/buscar"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Buscar ruta
+                        </Link>
+
+                        <Link
+                          to="/mis-solicitudes"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Mis reservas de cupo
+                        </Link>
+
+                        <Link
+                          to="/solicitar-viaje"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Solicitar viaje nuevo
+                        </Link>
+
+                        <Link
+                          to="/mis-solicitudes-nuevas"
+                          className="opcion-menu-usuario"
+                          onClick={() => setMostrarMenuUsuario(false)}
+                        >
+                          Mis viajes solicitados
+                        </Link>
+                      </>
+                    )}
 
                     {esConductor && (
                       <>
@@ -569,34 +644,26 @@ function Aplicacion() {
                           className="opcion-menu-usuario"
                           onClick={() => setMostrarMenuUsuario(false)}
                         >
-                          Mis rutas
+                          Mis rutas y solicitudes
                         </Link>
                       </>
                     )}
 
-                    {esPasajero && (
+                    {!esAdministrador && (
                       <Link
-                        to="/mis-solicitudes"
+                        to="/notificaciones"
                         className="opcion-menu-usuario"
                         onClick={() => setMostrarMenuUsuario(false)}
                       >
-                        Mis solicitudes
+                        Notificaciones
+                        {hayNotificacionesSinLeer && (
+                          <span
+                            className="punto-notificacion"
+                            aria-label="Hay notificaciones sin leer"
+                          />
+                        )}
                       </Link>
                     )}
-                    <Link
-                      to="/solicitar-viaje"
-                      className="opcion-menu-usuario"
-                      onClick={() => setMostrarMenuUsuario(false)}
-                    >
-                      Solicitar viaje nuevo
-                    </Link>
-                    <Link
-                      to="/mis-solicitudes-nuevas"
-                      className="opcion-menu-usuario"
-                      onClick={() => setMostrarMenuUsuario(false)}
-                    >
-                      Mis viajes solicitados
-                    </Link>
 
                     <Link
                       to="/mi-cuenta"
@@ -604,15 +671,6 @@ function Aplicacion() {
                       onClick={() => setMostrarMenuUsuario(false)}
                     >
                       Mi cuenta
-                    </Link>
-
-
-                    <Link
-                      to="/notificaciones"
-                      className="opcion-menu-usuario"
-                      onClick={() => setMostrarMenuUsuario(false)}
-                    >
-                      Notificaciones
                     </Link>
 
                     <div className="separador-menu" />
@@ -713,6 +771,10 @@ function Aplicacion() {
             element={
               requiereRegistroVehiculo ? (
                 <Navigate to="/mi-cuenta" replace />
+              ) : esConductor ? (
+                <Navigate to="/mis-rutas" replace />
+              ) : esAdministrador ? (
+                <Navigate to="/admin" replace />
               ) : (
                 <BuscarRuta
                   usuario={usuario}
@@ -761,6 +823,8 @@ function Aplicacion() {
               usuario ? (
                 requiereRegistroVehiculo ? (
                   <Navigate to="/mi-cuenta" replace />
+                ) : !esPasajero ? (
+                  <Navigate to={esConductor ? "/mis-rutas" : "/admin"} replace />
                 ) : (
                   <MisSolicitudes
                     usuario={usuario}

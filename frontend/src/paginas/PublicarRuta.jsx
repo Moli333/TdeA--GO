@@ -11,6 +11,11 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./PublicarRuta.css";
+import BuscadorUbicacion from "../components/BuscadorUbicacion";
+import {
+  buscarMejorLugar,
+  nombreDesdeCoordenadas,
+} from "../utils/geocodificacion";
 
 const UBICACION_INICIAL = [6.2442, -75.5812];
 const TOKEN_MAPBOX = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -238,56 +243,17 @@ function PublicarRuta({ usuario, API_URL }) {
       : 0;
 
   const obtenerCoordenadas = async (lugar) => {
-    const respuesta = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(
-        lugar
-      )}`
-    );
-
-    if (!respuesta.ok) {
-      throw new Error(
-        "No fue posible consultar la ubicación."
-      );
-    }
-
-    const resultados = await respuesta.json();
-
-    if (!resultados.length) {
-      throw new Error(
-        `No se encontró la ubicación: ${lugar}`
-      );
-    }
+    const resultado = await buscarMejorLugar(lugar);
 
     return {
-      lat: Number(resultados[0].lat),
-      lng: Number(resultados[0].lon),
-      nombre: resultados[0].display_name,
+      lat: resultado.lat,
+      lng: resultado.lng,
+      nombre: resultado.nombre,
     };
   };
 
-  const obtenerNombreUbicacion = async (
-    lat,
-    lng
-  ) => {
-    try {
-      const respuesta = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
-      );
-
-      if (!respuesta.ok) {
-        return "Ubicación seleccionada";
-      }
-
-      const resultado = await respuesta.json();
-
-      return (
-        resultado.display_name ||
-        "Ubicación seleccionada"
-      );
-    } catch {
-      return "Ubicación seleccionada";
-    }
-  };
+  const obtenerNombreUbicacion = (lat, lng) =>
+    nombreDesdeCoordenadas(lat, lng);
 
   const buscarOrigen = async () => {
     if (!origen.trim()) {
@@ -638,17 +604,23 @@ function PublicarRuta({ usuario, API_URL }) {
 
                   <div className="campo-ubicacion">
 
-                    <input
+                    <BuscadorUbicacion
                       id="origen"
-                      type="text"
-                      value={origen}
-                      onChange={(evento) => {
-                        setOrigen(
-                          evento.target.value
-                        );
+                      valor={origen}
+                      textoConfirmado={ubicacionOrigen?.nombre}
+                      placeholder="Ej. Calle 80 #45-10, Robledo, Medellín"
+                      alCambiarTexto={(texto) => {
+                        setOrigen(texto);
                         setUbicacionOrigen(null);
                       }}
-                      placeholder="Ej. Bello, Antioquia"
+                      alSeleccionar={(lugar) => {
+                        setOrigen(lugar.nombre);
+                        setUbicacionOrigen({
+                          lat: lugar.lat,
+                          lng: lugar.lng,
+                          nombre: lugar.nombre,
+                        });
+                      }}
                     />
 
                     <button
@@ -734,17 +706,23 @@ function PublicarRuta({ usuario, API_URL }) {
 
                   <div className="campo-ubicacion">
 
-                    <input
+                    <BuscadorUbicacion
                       id="destino"
-                      type="text"
-                      value={destino}
-                      onChange={(evento) => {
-                        setDestino(
-                          evento.target.value
-                        );
+                      valor={destino}
+                      textoConfirmado={ubicacionDestino?.nombre}
+                      placeholder="Ej. Tecnológico de Antioquia, Robledo"
+                      alCambiarTexto={(texto) => {
+                        setDestino(texto);
                         setUbicacionDestino(null);
                       }}
-                      placeholder="Ej. Tecnológico de Antioquia"
+                      alSeleccionar={(lugar) => {
+                        setDestino(lugar.nombre);
+                        setUbicacionDestino({
+                          lat: lugar.lat,
+                          lng: lugar.lng,
+                          nombre: lugar.nombre,
+                        });
+                      }}
                     />
 
                     <button

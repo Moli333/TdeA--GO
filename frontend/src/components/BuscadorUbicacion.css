@@ -1,0 +1,61 @@
+.buscador-ubicacion {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.buscador-ubicacion input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.buscador-ubicacion-cargando {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: var(--gris-texto, #647481);
+  pointer-events: none;
+}
+
+.buscador-ubicacion-lista {
+  position: absolute;
+  z-index: 1200;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--gris-borde, #dce5eb);
+  border-radius: 12px;
+  background: var(--blanco, #fff);
+  box-shadow: 0 14px 34px rgba(7, 59, 104, 0.18);
+}
+
+.buscador-ubicacion-lista li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.buscador-ubicacion-lista li strong {
+  font-size: 0.92rem;
+  color: var(--negro, #10202d);
+}
+
+.buscador-ubicacion-lista li small {
+  font-size: 0.78rem;
+  color: var(--gris-texto, #647481);
+}
+
+.buscador-ubicacion-lista li:hover,
+.buscador-ubicacion-lista li.activa {
+  background: var(--verde-claro, #dff6f2);
+}

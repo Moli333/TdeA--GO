@@ -3,6 +3,19 @@ import cors from "cors";
 import multer from "multer";
 import crypto from "crypto";
 import { supabase, supabaseAdmin } from "./config/supabase.js";
+import {
+  buscarConflictoHorario,
+  mensajeConflicto,
+  obtenerRolObligado,
+  aMilisegundos,
+  ahoraColombiaMs,
+} from "./servicios/horarios.js";
+import {
+  crearNotificacion,
+  marcarAtendidas,
+  estimarViaje,
+  TIPOS_PENDIENTES,
+} from "./servicios/notificaciones.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -682,6 +695,17 @@ app.put(
       if (idAutenticado === ADMINISTRADORA_PRINCIPAL_ID) {
         return res.status(403).json({
           mensaje: "El rol de la administradora principal está protegido.",
+        });
+      }
+
+      // Si llegó la hora de un compromiso, el usuario debe cumplirlo
+      // con el rol correspondiente y no puede cambiarlo.
+      const compromisoActivo = await obtenerRolObligado(perfil.id);
+
+      if (compromisoActivo && compromisoActivo.rol !== rol) {
+        return res.status(409).json({
+          mensaje: `Tienes un viaje como ${compromisoActivo.rol} (${compromisoActivo.origen} → ${compromisoActivo.destino}). Debes cumplirlo o rechazarlo antes de cambiar de rol.`,
+          rol_obligado: compromisoActivo.rol,
         });
       }
 
@@ -1400,24 +1424,8 @@ app.get("/api/rutas", async (req, res) => {
 // POST /api/rutas
 // ------------------------------------------------------------------
 
-app.post("/api/rutas", async (req, res) => {
+app.post("/api/rutas", verificarAutenticacion, async (req, res) => {
   try {
-    const encabezado = req.headers.authorization || "";
-    const token = encabezado.startsWith("Bearer ")
-      ? encabezado.substring(7)
-      : null;
-
-    let usuarioAutenticado = null;
-
-    if (token) {
-      const { data: authData, error: authError } =
-        await supabase.auth.getUser(token);
-
-      if (!authError && authData.user) {
-        usuarioAutenticado = authData.user;
-      }
-    }
-    console.log("BODY RECIBIDO EN /api/rutas:", req.body);
 
     const {
       conductor_id,
@@ -1445,8 +1453,16 @@ app.post("/api/rutas", async (req, res) => {
         ? Math.ceil(duracionMinutos)
         : null;
 
-    const idConductor =
-      conductor_id || id_conductor || user_id;
+    // La identidad sale del token, no del cuerpo de la petición.
+    const idConductor = req.usuarioAutenticado.id;
+
+    const idEnviado = conductor_id || id_conductor || user_id;
+
+    if (idEnviado && String(idEnviado) !== String(idConductor)) {
+      return res.status(403).json({
+        mensaje: "No puedes publicar rutas en nombre de otro usuario.",
+      });
+    }
 
     const totalCupos = Number(
       cupos_totales || cupos || 4
@@ -1594,6 +1610,28 @@ app.post("/api/rutas", async (req, res) => {
       ).toISOString();
     }
 
+    const salidaMs = aMilisegundos(fechaHoraSalida);
+
+    if (!Number.isFinite(salidaMs) || salidaMs < ahoraColombiaMs()) {
+      return res.status(400).json({
+        mensaje: "La fecha y hora de salida deben ser futuras.",
+      });
+    }
+
+    // Regla de horarios: sin cruces con otros compromisos.
+    const conflictoHorario = await buscarConflictoHorario(
+      idConductor,
+      fechaHoraSalida,
+      duracionValida
+    );
+
+    if (conflictoHorario) {
+      return res.status(409).json({
+        mensaje: mensajeConflicto(conflictoHorario),
+        conflicto: conflictoHorario,
+      });
+    }
+
     const { data, error } = await dbClient
       .from("rutas")
       .insert({
@@ -1660,9 +1698,15 @@ app.post("/api/rutas", async (req, res) => {
 // GET /api/rutas/conductor/:id
 // ------------------------------------------------------------------
 
-app.get("/api/rutas/conductor/:id", async (req, res) => {
+app.get("/api/rutas/conductor/:id", verificarAutenticacion, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (String(id) !== String(req.usuarioAutenticado.id)) {
+      return res.status(403).json({
+        mensaje: "No tienes autorización para consultar estas rutas.",
+      });
+    }
 
     if (!id || id === "undefined" || id === "null") {
       return res.status(400).json({
@@ -1732,7 +1776,7 @@ app.get("/api/rutas/conductor/:id", async (req, res) => {
 // ------------------------------------------------------------------
 
 // PASAJERO: solicitar cupo en ruta publicada (Descuenta plaza y avisa al conductor)
-app.post("/api/solicitudes", async (req, res) => {
+app.post("/api/solicitudes", verificarAutenticacion, async (req, res) => {
   try {
     const {
       viaje_id,
@@ -1743,24 +1787,43 @@ app.post("/api/solicitudes", async (req, res) => {
 
     const idViaje = viaje_id || ruta_id;
 
-    console.log("➡️ Recibida solicitud para viaje/ruta:", idViaje, "de pasajero:", pasajero_id);
+    // La identidad sale del token, no del cuerpo de la petición.
+    const idPasajero = req.usuarioAutenticado.id;
 
-    if (!idViaje || !pasajero_id) {
+    if (pasajero_id && String(pasajero_id) !== String(idPasajero)) {
+      return res.status(403).json({
+        mensaje: "No puedes solicitar cupos en nombre de otro usuario.",
+      });
+    }
+
+    if (!idViaje) {
       return res.status(400).json({
         mensaje: "Faltan datos para solicitar el cupo.",
+      });
+    }
+
+    const { data: perfilPasajero } = await dbClient
+      .from("profiles")
+      .select("id, nombre_completo, rol")
+      .eq("id", idPasajero)
+      .maybeSingle();
+
+    if (!perfilPasajero || perfilPasajero.rol !== "pasajero") {
+      return res.status(403).json({
+        mensaje: "Solo los pasajeros pueden solicitar cupos.",
       });
     }
 
     // 1. Consultar la ruta
     const { data: ruta, error: errorRuta } = await dbClient
       .from("rutas")
-      .select("id, conductor_id, origen, destino, cupos_disponibles, estado")
+      .select(
+        "id, conductor_id, origen, destino, cupos_disponibles, estado, fecha_hora_salida, duracion_minutos"
+      )
       .eq("id", idViaje)
       .maybeSingle();
 
     if (errorRuta) throw errorRuta;
-
-    console.log("📍 Ruta encontrada en la BD:", ruta); // <--- ESTE LOG NOS DIRÁ QUÉ TRAJO
 
     if (!ruta) {
       return res.status(404).json({
@@ -1774,8 +1837,13 @@ app.post("/api/solicitudes", async (req, res) => {
       });
     }
 
-    const cuposActuales = Number(ruta.cupos_disponibles);
-    if (cuposActuales <= 0) {
+    if (String(ruta.conductor_id) === String(idPasajero)) {
+      return res.status(400).json({
+        mensaje: "No puedes solicitar un cupo en tu propia ruta.",
+      });
+    }
+
+    if (Number(ruta.cupos_disponibles) <= 0) {
       return res.status(400).json({
         mensaje: "No hay cupos disponibles en esta ruta.",
       });
@@ -1786,7 +1854,7 @@ app.post("/api/solicitudes", async (req, res) => {
       .from("solicitudes_viaje")
       .select("id, estado")
       .eq("viaje_id", idViaje)
-      .eq("pasajero_id", pasajero_id)
+      .eq("pasajero_id", idPasajero)
       .maybeSingle();
 
     if (errorExistente) throw errorExistente;
@@ -1797,14 +1865,19 @@ app.post("/api/solicitudes", async (req, res) => {
       });
     }
 
-    // 3. Obtener el nombre del pasajero para la notificación
-    const { data: pasajeroInfo } = await dbClient
-      .from("profiles")
-      .select("nombre_completo")
-      .eq("id", pasajero_id)
-      .maybeSingle();
+    // 3. Regla de horarios: no puede tener otro compromiso cruzado.
+    const conflicto = await buscarConflictoHorario(
+      idPasajero,
+      ruta.fecha_hora_salida,
+      ruta.duracion_minutos
+    );
 
-    const nombrePasajero = pasajeroInfo?.nombre_completo || "Un pasajero";
+    if (conflicto) {
+      return res.status(409).json({
+        mensaje: mensajeConflicto(conflicto),
+        conflicto,
+      });
+    }
 
     // 4. Crear la solicitud de viaje
     const { data, error } = await dbClient
@@ -1812,7 +1885,7 @@ app.post("/api/solicitudes", async (req, res) => {
       .insert({
         id: crypto.randomUUID(),
         viaje_id: idViaje,
-        pasajero_id,
+        pasajero_id: idPasajero,
         punto_encuentro: punto_encuentro || null,
         estado: "pendiente",
         fecha_solicitud: new Date().toISOString(),
@@ -1822,23 +1895,15 @@ app.post("/api/solicitudes", async (req, res) => {
 
     if (error) throw error;
 
-    // 6. CREAR NOTIFICACIÓN AUTOMÁTICA PARA EL CONDUCTOR
-    if (ruta.conductor_id) {
-      const { error: errorNotif } = await dbClient
-        .from("notificaciones")
-        .insert({
-          id: crypto.randomUUID(),
-          usuario_id: ruta.conductor_id,
-          titulo: "¡Nueva solicitud de cupo!",
-          mensaje: `${nombrePasajero} ha solicitado un cupo en tu ruta de ${ruta.origen} a ${ruta.destino}.`,
-          leida: false,
-          fecha_creacion: new Date().toISOString(),
-        });
-
-      if (errorNotif) {
-        console.error("Error al crear notificación para el conductor:", errorNotif);
-      }
-    }
+    // 5. Avisar al conductor (con vínculo a la solicitud).
+    await crearNotificacion({
+      usuarioId: ruta.conductor_id,
+      titulo: "¡Nueva solicitud de cupo!",
+      mensaje: `${perfilPasajero.nombre_completo || "Un pasajero"} ha solicitado un cupo en tu ruta de ${ruta.origen} a ${ruta.destino}.`,
+      tipoEvento: "cupo_pendiente",
+      solicitudId: data.id,
+      origenSolicitud: "cupo",
+    });
 
     res.status(201).json({
       mensaje: "¡Solicitud enviada! El conductor debe aceptar tu cupo para confirmar la reserva.",
@@ -1854,215 +1919,464 @@ app.post("/api/solicitudes", async (req, res) => {
 });
 
 
-// PASAJERO: registrar solicitud de viaje nuevo personalizado
-app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
-  try {
-    const {
-      pasajero_id,
-      origen,
-      destino,
-      lat_origen,
-      lng_origen,
-      lat_destino,
-      lng_destino,
-      fecha_hora_salida,
-    } = req.body;
+// ------------------------------------------------------------------
+// VIAJES NUEVOS (solicitudes personalizadas del pasajero)
+// Solo los conductores ven estas solicitudes.
+// ------------------------------------------------------------------
 
-    if (
-      !pasajero_id ||
-      !origen ||
-      !destino ||
-      lat_origen == null ||
-      lng_origen == null ||
-      lat_destino == null ||
-      lng_destino == null ||
-      !fecha_hora_salida
-    ) {
-      return res.status(400).json({
-        mensaje: "Completa todos los datos del viaje.",
-      });
-    }
+// Conductores a los que les puede interesar una solicitud:
+// rol conductor, distinto del pasajero y sin cruce de horario.
+async function obtenerConductoresInteresados(solicitud) {
+  const { data: conductores, error } = await dbClient
+    .from("profiles")
+    .select("id")
+    .eq("rol", "conductor")
+    .neq("id", solicitud.pasajero_id)
+    .limit(300);
 
-    const { data: pasajero, error: errorPasajero } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("id, rol")
-        .eq("id", pasajero_id)
-        .maybeSingle();
+  if (error || !conductores) return [];
 
-    if (errorPasajero) throw errorPasajero;
+  const interesados = [];
 
-    if (!pasajero || pasajero.rol !== "pasajero") {
-      return res.status(403).json({
-        mensaje: "Solo los pasajeros pueden registrar solicitudes.",
-      });
-    }
+  for (let i = 0; i < conductores.length; i += 10) {
+    const lote = conductores.slice(i, i + 10);
 
-    const { data, error } = await supabaseAdmin
-      .from("solicitudes_viajes_nuevos")
-      .insert({
-        id: crypto.randomUUID(),
-        pasajero_id,
-        origen: String(origen).trim(),
-        destino: String(destino).trim(),
-        lat_origen: Number(lat_origen),
-        lng_origen: Number(lng_origen),
-        lat_destino: Number(lat_destino),
-        lng_destino: Number(lng_destino),
-        fecha_hora_salida,
-        estado: "pendiente",
-        conductor_id: null,
+    const resultados = await Promise.all(
+      lote.map(async (c) => {
+        const conflicto = await buscarConflictoHorario(
+          c.id,
+          solicitud.fecha_hora_salida,
+          null
+        );
+        return conflicto ? null : c.id;
       })
-      .select()
-      .single();
+    );
 
-    if (error) throw error;
-
-    return res.status(201).json({
-      mensaje: "Solicitud registrada correctamente.",
-      solicitud: data,
-    });
-  } catch (error) {
-    console.error("Error registrando viaje nuevo:", error);
-    return res.status(500).json({
-      mensaje: "No fue posible registrar la solicitud.",
-      detalle: error.message,
-    });
+    interesados.push(...resultados.filter(Boolean));
   }
-});
 
+  return interesados;
+}
 
-// CONDUCTOR: aceptar solicitud de viaje nuevo
-app.patch(
-  "/api/solicitudes-viajes-nuevos/:id/aceptar",
+// PASAJERO: registrar solicitud de viaje nuevo personalizado
+app.post(
+  "/api/solicitudes-viajes-nuevos",
+  verificarAutenticacion,
   async (req, res) => {
     try {
-      const { id } = req.params;
-      const { conductor_id } = req.body;
+      const {
+        pasajero_id,
+        origen,
+        destino,
+        lat_origen,
+        lng_origen,
+        lat_destino,
+        lng_destino,
+        fecha_hora_salida,
+        inmediato,
+      } = req.body;
 
-      if (!conductor_id) {
-        return res.status(400).json({
-          mensaje: "No se identificó al conductor.",
+      const idPasajero = req.usuarioAutenticado.id;
+
+      if (pasajero_id && String(pasajero_id) !== String(idPasajero)) {
+        return res.status(403).json({
+          mensaje: "No puedes registrar solicitudes en nombre de otro usuario.",
         });
       }
 
-      const { data: perfil, error: errorPerfil } = await dbClient
+      const coordenadas = [lat_origen, lng_origen, lat_destino, lng_destino];
+
+      if (
+        !String(origen || "").trim() ||
+        !String(destino || "").trim() ||
+        coordenadas.some(
+          (v) => v === null || v === undefined || v === "" || !Number.isFinite(Number(v))
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            "Completa el origen, destino y la ubicación de ambos puntos.",
+        });
+      }
+
+      // Viaje inmediato: sale en 10 minutos. Reserva: fecha y hora elegidas.
+      const esInmediato = inmediato === true || inmediato === "true";
+
+      const salidaMs = esInmediato
+        ? ahoraColombiaMs() + 10 * 60000
+        : aMilisegundos(fecha_hora_salida);
+
+      if (!Number.isFinite(salidaMs)) {
+        return res.status(400).json({
+          mensaje: "La fecha y hora de salida no son válidas.",
+        });
+      }
+
+      if (!esInmediato && salidaMs < ahoraColombiaMs() + 5 * 60000) {
+        return res.status(400).json({
+          mensaje: "La fecha y hora del viaje deben ser futuras.",
+        });
+      }
+
+      const salidaTexto = new Date(salidaMs).toISOString().slice(0, 19);
+
+      const { data: pasajero, error: errorPasajero } = await dbClient
         .from("profiles")
-        .select("id, rol")
-        .eq("id", conductor_id)
+        .select("id, rol, nombre_completo")
+        .eq("id", idPasajero)
         .maybeSingle();
 
-      if (errorPerfil) throw errorPerfil;
+      if (errorPasajero) throw errorPasajero;
 
-      if (!perfil || perfil.rol !== "conductor") {
+      if (!pasajero || pasajero.rol !== "pasajero") {
         return res.status(403).json({
-          mensaje: "Solo un conductor puede aceptar el viaje.",
+          mensaje:
+            "Solo los usuarios con rol de pasajero pueden solicitar viajes nuevos.",
         });
       }
+
+      const conflicto = await buscarConflictoHorario(idPasajero, salidaTexto, null);
+
+      if (conflicto) {
+        return res.status(409).json({
+          mensaje: mensajeConflicto(conflicto),
+          conflicto,
+        });
+      }
+
+      const estimado = estimarViaje(
+        Number(lat_origen),
+        Number(lng_origen),
+        Number(lat_destino),
+        Number(lng_destino)
+      );
 
       const { data, error } = await dbClient
         .from("solicitudes_viajes_nuevos")
-        .update({
-          estado: "aceptada",
-          conductor_id,
-          aceptado_en: new Date().toISOString(),
+        .insert({
+          id: crypto.randomUUID(),
+          pasajero_id: idPasajero,
+          origen: String(origen).trim(),
+          destino: String(destino).trim(),
+          lat_origen: Number(lat_origen),
+          lng_origen: Number(lng_origen),
+          lat_destino: Number(lat_destino),
+          lng_destino: Number(lng_destino),
+          fecha_hora_salida: salidaTexto,
+          estado: "pendiente",
+          distancia_km: estimado.distanciaKm,
+          tarifa_sugerida: estimado.tarifa,
         })
-        .eq("id", id)
-        .eq("estado", "pendiente")
-        .is("conductor_id", null)
         .select()
-        .maybeSingle();
+        .single();
 
       if (error) throw error;
 
-      if (!data) {
-        return res.status(409).json({
-          mensaje: "Otro conductor ya aceptó esta solicitud.",
-        });
-      }
+      // Avisar solo a los conductores interesados.
+      const interesados = await obtenerConductoresInteresados(data);
 
-      return res.json({
-        mensaje: "Solicitud aceptada correctamente.",
+      await Promise.all(
+        interesados.map((idConductor) =>
+          crearNotificacion({
+            usuarioId: idConductor,
+            titulo: esInmediato
+              ? "¡Viaje inmediato solicitado!"
+              : "Nueva solicitud de viaje",
+            mensaje: `${pasajero.nombre_completo || "Un pasajero"} solicita un viaje de ${data.origen} a ${data.destino}. Tarifa de referencia: $${Number(data.tarifa_sugerida).toLocaleString("es-CO")}.`,
+            tipoEvento: "viaje_nuevo_pendiente",
+            solicitudId: data.id,
+            origenSolicitud: "viaje_nuevo",
+          })
+        )
+      );
+
+      return res.status(201).json({
+        mensaje: "Solicitud registrada correctamente.",
         solicitud: data,
+        conductores_avisados: interesados.length,
       });
     } catch (error) {
-      console.error("Error aceptando solicitud:", error);
+      console.error("Error registrando viaje nuevo:", error);
       return res.status(500).json({
-        mensaje: "No fue posible aceptar la solicitud.",
+        mensaje: "No fue posible registrar la solicitud.",
+        detalle: error.message,
       });
     }
   }
 );
 
+// Lógica común de aceptar / rechazar un viaje nuevo.
+async function responderViajeNuevo(req, res, accion) {
+  try {
+    const { id } = req.params;
+    const conductorId = req.usuarioAutenticado.id;
 
-// CONDUCTOR: rechazar viaje nuevo solo para sí mismo
-app.patch(
-  "/api/solicitudes-viajes-nuevos/:id/rechazar",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { conductor_id } = req.body;
+    if (
+      req.body?.conductor_id &&
+      String(req.body.conductor_id) !== String(conductorId)
+    ) {
+      return res.status(403).json({
+        mensaje: "No puedes responder en nombre de otro conductor.",
+      });
+    }
 
-      if (!conductor_id) {
-        return res.status(400).json({
-          mensaje: "No se identificó al conductor.",
-        });
-      }
+    const { data: perfil, error: errorPerfil } = await dbClient
+      .from("profiles")
+      .select("id, rol, nombre_completo, telefono")
+      .eq("id", conductorId)
+      .maybeSingle();
 
-      const { data: perfil, error: errorPerfil } = await dbClient
-        .from("profiles")
-        .select("id, rol")
-        .eq("id", conductor_id)
-        .maybeSingle();
+    if (errorPerfil) throw errorPerfil;
 
-      if (errorPerfil) throw errorPerfil;
+    if (!perfil || perfil.rol !== "conductor") {
+      return res.status(403).json({
+        mensaje: "Solo un conductor puede responder esta solicitud.",
+      });
+    }
 
-      if (!perfil || perfil.rol !== "conductor") {
-        return res.status(403).json({
-          mensaje: "Solo un conductor puede rechazar la solicitud.",
-        });
-      }
+    const { data: solicitud, error: errorSolicitud } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
 
-      const { data: solicitud, error: errorSolicitud } = await dbClient
-        .from("solicitudes_viajes_nuevos")
-        .select("id, estado, conductor_id")
-        .eq("id", id)
-        .maybeSingle();
+    if (errorSolicitud) throw errorSolicitud;
 
-      if (errorSolicitud) throw errorSolicitud;
+    if (!solicitud) {
+      return res.status(404).json({ mensaje: "La solicitud no existe." });
+    }
 
-      if (
-        !solicitud ||
-        solicitud.estado !== "pendiente" ||
-        solicitud.conductor_id
-      ) {
-        return res.status(409).json({
-          mensaje: "Esta solicitud ya no está disponible.",
-        });
-      }
+    if (solicitud.estado !== "pendiente" || solicitud.conductor_id) {
+      await marcarAtendidas(id, TIPOS_PENDIENTES, conductorId);
+      return res.status(409).json({
+        mensaje: "Esta solicitud ya no está disponible.",
+      });
+    }
 
+    // ---- RECHAZAR: solo desaparece para este conductor ----
+    if (accion === "rechazar") {
       const { error } = await dbClient
         .from("solicitudes_viajes_rechazos")
         .upsert(
-          {
-            solicitud_id: id,
-            conductor_id,
-          },
-          {
-            onConflict: "solicitud_id,conductor_id",
-            ignoreDuplicates: true,
-          }
+          { solicitud_id: id, conductor_id: conductorId },
+          { onConflict: "solicitud_id,conductor_id", ignoreDuplicates: true }
         );
 
       if (error) throw error;
 
+      await marcarAtendidas(id, TIPOS_PENDIENTES, conductorId);
+
       return res.json({
         mensaje: "Solicitud descartada de tu lista.",
       });
+    }
+
+    // ---- ACEPTAR ----
+    const conflicto = await buscarConflictoHorario(
+      conductorId,
+      solicitud.fecha_hora_salida,
+      null
+    );
+
+    if (conflicto) {
+      return res.status(409).json({
+        mensaje: mensajeConflicto(conflicto),
+        conflicto,
+      });
+    }
+
+    const { data, error } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .update({
+        estado: "aceptada",
+        conductor_id: conductorId,
+        aceptado_en: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("estado", "pendiente")
+      .is("conductor_id", null)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(409).json({
+        mensaje: "Otro conductor ya aceptó esta solicitud.",
+      });
+    }
+
+    // Apaga la alarma para TODOS los conductores y avisa al pasajero.
+    await marcarAtendidas(id, TIPOS_PENDIENTES);
+
+    await crearNotificacion({
+      usuarioId: data.pasajero_id,
+      titulo: "¡Un conductor aceptó tu viaje!",
+      mensaje: `${perfil.nombre_completo || "Un conductor"} aceptó tu viaje de ${data.origen} a ${data.destino}.`,
+      tipoEvento: "viaje_nuevo_respuesta",
+      solicitudId: data.id,
+      origenSolicitud: "viaje_nuevo",
+    });
+
+    return res.json({
+      mensaje: "Solicitud aceptada correctamente.",
+      solicitud: data,
+    });
+  } catch (error) {
+    console.error("Error respondiendo viaje nuevo:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible responder la solicitud.",
+    });
+  }
+}
+
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/aceptar",
+  verificarAutenticacion,
+  (req, res) => responderViajeNuevo(req, res, "aceptar")
+);
+
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/rechazar",
+  verificarAutenticacion,
+  (req, res) => responderViajeNuevo(req, res, "rechazar")
+);
+
+app.patch(
+  "/api/solicitudes-viajes-nuevos/:id/responder",
+  verificarAutenticacion,
+  (req, res) => {
+    const { accion } = req.body || {};
+
+    if (!["aceptar", "rechazar"].includes(accion)) {
+      return res.status(400).json({
+        mensaje: "La acción debe ser aceptar o rechazar.",
+      });
+    }
+
+    return responderViajeNuevo(req, res, accion);
+  }
+);
+
+// CONDUCTOR: consultar solicitudes pendientes que le corresponden.
+app.get(
+  "/api/solicitudes-viajes-nuevos",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const conductorId = req.usuarioAutenticado.id;
+
+      if (
+        req.query.conductor_id &&
+        String(req.query.conductor_id) !== String(conductorId)
+      ) {
+        return res.status(403).json({
+          mensaje: "No puedes consultar las solicitudes de otro conductor.",
+        });
+      }
+
+      const { data: conductor, error: errorConductor } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", conductorId)
+        .maybeSingle();
+
+      if (errorConductor) throw errorConductor;
+
+      if (!conductor || conductor.rol !== "conductor") {
+        return res.status(403).json({
+          mensaje: "Solo los conductores pueden consultar estas solicitudes.",
+        });
+      }
+
+      const { data: solicitudes, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .select(`
+          id, pasajero_id, origen, destino,
+          lat_origen, lng_origen, lat_destino, lng_destino,
+          fecha_hora_salida, estado, creado_en,
+          distancia_km, tarifa_sugerida,
+          pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
+            id, nombre_completo, telefono, foto_url, verificado
+          )
+        `)
+        .eq("estado", "pendiente")
+        .is("conductor_id", null)
+        .neq("pasajero_id", conductorId)
+        .order("creado_en", { ascending: false })
+        .limit(60);
+
+      if (error) throw error;
+
+      const { data: rechazos, error: errorRechazos } = await dbClient
+        .from("solicitudes_viajes_rechazos")
+        .select("solicitud_id")
+        .eq("conductor_id", conductorId);
+
+      if (errorRechazos) throw errorRechazos;
+
+      const rechazadas = new Set((rechazos || []).map((r) => r.solicitud_id));
+      const ahora = ahoraColombiaMs();
+
+      const candidatas = (solicitudes || []).filter(
+        (s) =>
+          !rechazadas.has(s.id) &&
+          aMilisegundos(s.fecha_hora_salida) > ahora - 15 * 60000
+      );
+
+      // Oculta las que se cruzan con compromisos del conductor.
+      const visibles = [];
+      for (const s of candidatas) {
+        const conflicto = await buscarConflictoHorario(
+          conductorId,
+          s.fecha_hora_salida,
+          null
+        );
+        if (!conflicto) visibles.push(s);
+      }
+
+      return res.status(200).json(visibles);
     } catch (error) {
-      console.error("Error rechazando solicitud:", error);
+      console.error("Error consultando solicitudes de viaje nuevo:", error);
       return res.status(500).json({
-        mensaje: "No fue posible rechazar la solicitud.",
+        mensaje: "No fue posible consultar las solicitudes pendientes.",
+      });
+    }
+  }
+);
+
+// PASAJERO: consultar sus propias solicitudes de viaje nuevo.
+app.get(
+  "/api/solicitudes-viajes-nuevos/pasajero/:id",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (String(id) !== String(req.usuarioAutenticado.id)) {
+        return res.status(403).json({
+          mensaje: "No tienes autorización para consultar estas solicitudes.",
+        });
+      }
+
+      const { data, error } = await dbClient
+        .from("solicitudes_viajes_nuevos")
+        .select(`
+          *,
+          conductor:profiles!solicitudes_viajes_nuevos_conductor_id_fkey (
+            id, nombre_completo, telefono, foto_url
+          )
+        `)
+        .eq("pasajero_id", id)
+        .order("creado_en", { ascending: false });
+
+      if (error) throw error;
+
+      return res.status(200).json(data || []);
+    } catch (error) {
+      console.error("Error consultando solicitudes nuevas del pasajero:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar tus solicitudes de viaje.",
       });
     }
   }
@@ -2247,6 +2561,39 @@ app.patch(
         return res.status(estadoHttp).json({ mensaje });
       }
 
+      // Apaga la alarma del conductor y avisa al pasajero.
+      await marcarAtendidas(id, ["cupo_pendiente"], perfil.id);
+
+      try {
+        const { data: solCupo } = await dbClient
+          .from("solicitudes_viaje")
+          .select(`
+            id, pasajero_id,
+            ruta:rutas!solicitudes_viaje_viaje_id_fkey ( origen, destino )
+          `)
+          .eq("id", id)
+          .maybeSingle();
+
+        if (solCupo?.pasajero_id) {
+          await crearNotificacion({
+            usuarioId: solCupo.pasajero_id,
+            titulo:
+              accion === "aceptar"
+                ? "¡Tu cupo fue aceptado!"
+                : "Tu solicitud de cupo fue rechazada",
+            mensaje:
+              accion === "aceptar"
+                ? `El conductor aceptó tu cupo de ${solCupo.ruta?.origen} a ${solCupo.ruta?.destino}.`
+                : `El conductor rechazó tu solicitud de ${solCupo.ruta?.origen} a ${solCupo.ruta?.destino}.`,
+            tipoEvento: "cupo_respuesta",
+            solicitudId: id,
+            origenSolicitud: "cupo",
+          });
+        }
+      } catch (errorAviso) {
+        console.error("No se pudo avisar al pasajero:", errorAviso);
+      }
+
       return res.status(200).json({
         mensaje:
           accion === "aceptar"
@@ -2327,6 +2674,225 @@ app.get(
 // ============================================
 // NOTIFICACIONES
 // ============================================
+
+// ------------------------------------------------------------------
+// RESUMEN GLOBAL DE NOTIFICACIONES
+// Lo consulta el frontend cada pocos segundos desde cualquier pantalla:
+//  - contador de no leídas (punto rojo del favicon y del menú)
+//  - alarmas pendientes del conductor (ventana emergente)
+//  - rol obligado cuando llegó la hora de un compromiso
+// ------------------------------------------------------------------
+
+app.get(
+  "/api/notificaciones-resumen",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const idUsuario = req.usuarioAutenticado.id;
+
+      const { data: perfil } = await dbClient
+        .from("profiles")
+        .select("id, rol")
+        .eq("id", idUsuario)
+        .maybeSingle();
+
+      if (!perfil) {
+        return res.status(404).json({ mensaje: "No se encontró tu perfil." });
+      }
+
+      // ---- no leídas ----
+      const { data: noLeidas, count } = await dbClient
+        .from("notificaciones")
+        .select("id", { count: "exact" })
+        .eq("usuario_id", idUsuario)
+        .eq("leida", false)
+        .order("fecha_creacion", { ascending: false })
+        .limit(50);
+
+      // ---- rol obligado por compromiso ----
+      let rolActual = perfil.rol;
+      let rolCambiado = false;
+      let compromiso = null;
+
+      if (["conductor", "pasajero"].includes(perfil.rol)) {
+        compromiso = await obtenerRolObligado(idUsuario);
+
+        if (compromiso && compromiso.rol !== perfil.rol) {
+          const { error: errorRol } = await dbClient
+            .from("profiles")
+            .update({ rol: compromiso.rol })
+            .eq("id", idUsuario);
+
+          if (!errorRol) {
+            rolActual = compromiso.rol;
+            rolCambiado = true;
+          }
+        }
+      }
+
+      // ---- alarmas del conductor ----
+      const alarmas = [];
+
+      if (rolActual === "conductor") {
+        let consulta = dbClient
+          .from("notificaciones")
+          .select("id, titulo, mensaje, tipo_evento, solicitud_id, fecha_creacion")
+          .eq("usuario_id", idUsuario)
+          .in("tipo_evento", TIPOS_PENDIENTES)
+          .eq("atendida", false)
+          .not("solicitud_id", "is", null)
+          .order("fecha_creacion", { ascending: true })
+          .limit(20);
+
+        let { data: pendientes, error: errorPend } = await consulta;
+
+        // Si aún no se ejecutó la migración SQL (columna "atendida").
+        if (errorPend) {
+          const alterno = await dbClient
+            .from("notificaciones")
+            .select("id, titulo, mensaje, tipo_evento, solicitud_id, fecha_creacion")
+            .eq("usuario_id", idUsuario)
+            .in("tipo_evento", TIPOS_PENDIENTES)
+            .eq("leida", false)
+            .not("solicitud_id", "is", null)
+            .order("fecha_creacion", { ascending: true })
+            .limit(20);
+          pendientes = alterno.data;
+        }
+
+        const idsCupo = (pendientes || [])
+          .filter((n) => n.tipo_evento === "cupo_pendiente")
+          .map((n) => n.solicitud_id);
+
+        const idsViaje = (pendientes || [])
+          .filter((n) => n.tipo_evento === "viaje_nuevo_pendiente")
+          .map((n) => n.solicitud_id);
+
+        const mapaCupo = {};
+        const mapaViaje = {};
+
+        if (idsCupo.length) {
+          const { data } = await dbClient
+            .from("solicitudes_viaje")
+            .select(`
+              id, estado, punto_encuentro, tarifa_sugerida, tarifa_acordada,
+              pasajero:profiles!solicitudes_viaje_pasajero_id_fkey (
+                id, nombre_completo, telefono, foto_url, verificado
+              ),
+              ruta:rutas!solicitudes_viaje_viaje_id_fkey (
+                origen, destino, fecha_hora_salida, distancia_km,
+                tarifa_contribucion, tarifa_sugerida
+              )
+            `)
+            .in("id", idsCupo);
+
+          (data || []).forEach((x) => (mapaCupo[x.id] = x));
+        }
+
+        if (idsViaje.length) {
+          const { data } = await dbClient
+            .from("solicitudes_viajes_nuevos")
+            .select(`
+              id, estado, conductor_id, origen, destino, fecha_hora_salida,
+              distancia_km, tarifa_sugerida,
+              pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
+                id, nombre_completo, telefono, foto_url, verificado
+              )
+            `)
+            .in("id", idsViaje);
+
+          (data || []).forEach((x) => (mapaViaje[x.id] = x));
+        }
+
+        for (const n of pendientes || []) {
+          const esCupo = n.tipo_evento === "cupo_pendiente";
+          const sol = esCupo ? mapaCupo[n.solicitud_id] : mapaViaje[n.solicitud_id];
+
+          // La solicitud ya no está pendiente: se apaga la alarma.
+          if (!sol || sol.estado !== "pendiente" || (!esCupo && sol.conductor_id)) {
+            await marcarAtendidas(n.solicitud_id, [n.tipo_evento], idUsuario);
+            continue;
+          }
+
+          alarmas.push(
+            esCupo
+              ? {
+                notificacion_id: n.id,
+                tipo: "cupo",
+                solicitud_id: n.solicitud_id,
+                titulo: n.titulo,
+                pasajero: sol.pasajero,
+                origen: sol.ruta?.origen,
+                destino: sol.ruta?.destino,
+                fecha_hora_salida: sol.ruta?.fecha_hora_salida,
+                distancia_km: sol.ruta?.distancia_km,
+                tarifa: sol.ruta?.tarifa_contribucion ?? sol.ruta?.tarifa_sugerida,
+                punto_encuentro: sol.punto_encuentro,
+              }
+              : {
+                notificacion_id: n.id,
+                tipo: "viaje_nuevo",
+                solicitud_id: n.solicitud_id,
+                titulo: n.titulo,
+                pasajero: sol.pasajero,
+                origen: sol.origen,
+                destino: sol.destino,
+                fecha_hora_salida: sol.fecha_hora_salida,
+                distancia_km: sol.distancia_km,
+                tarifa: sol.tarifa_sugerida,
+              }
+          );
+        }
+      }
+
+      return res.json({
+        no_leidas: count ?? (noLeidas || []).length,
+        no_leidas_ids: (noLeidas || []).map((n) => n.id),
+        alarmas,
+        rol_actual: rolActual,
+        rol_cambiado: rolCambiado,
+        compromiso_activo: compromiso
+          ? {
+            rol: compromiso.rol,
+            origen: compromiso.origen,
+            destino: compromiso.destino,
+            fecha_hora_salida: compromiso.fecha_hora_salida,
+          }
+          : null,
+      });
+    } catch (error) {
+      console.error("Error en resumen de notificaciones:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible consultar el resumen de notificaciones.",
+      });
+    }
+  }
+);
+
+// Marcar TODAS las notificaciones del usuario como leídas.
+// No apaga las alarmas: eso solo ocurre al aceptar o rechazar.
+app.patch(
+  "/api/notificaciones-leidas-todas",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const { error } = await dbClient
+        .from("notificaciones")
+        .update({ leida: true })
+        .eq("usuario_id", req.usuarioAutenticado.id)
+        .eq("leida", false);
+
+      if (error) throw error;
+
+      return res.json({ mensaje: "Notificaciones marcadas como leídas." });
+    } catch (error) {
+      console.error("Error marcando todas como leídas:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible actualizar las notificaciones.",
+      });
+    }
+  }
+);
 
 // Consultar las notificaciones del usuario autenticado
 app.get(
@@ -2516,330 +3082,6 @@ app.patch(
   }
 );
 // ------------------------------------------------------------------
-// 13. CREAR SOLICITUD DE VIAJE NUEVO
-// POST /api/solicitudes-viajes-nuevos
-// ------------------------------------------------------------------
-
-app.post("/api/solicitudes-viajes-nuevos", async (req, res) => {
-  try {
-    const {
-      pasajero_id,
-      origen,
-      destino,
-      lat_origen,
-      lng_origen,
-      lat_destino,
-      lng_destino,
-      fecha_hora_salida,
-    } = req.body;
-
-    const coordenadas = [
-      lat_origen,
-      lng_origen,
-      lat_destino,
-      lng_destino,
-    ];
-
-    if (
-      !pasajero_id ||
-      !String(origen || "").trim() ||
-      !String(destino || "").trim() ||
-      !fecha_hora_salida ||
-      coordenadas.some(
-        (valor) =>
-          valor === null ||
-          valor === undefined ||
-          valor === "" ||
-          !Number.isFinite(Number(valor))
-      )
-    ) {
-      return res.status(400).json({
-        mensaje:
-          "Completa el origen, destino, ubicación de ambos puntos, fecha y hora de salida.",
-      });
-    }
-
-    const fechaSalida = new Date(fecha_hora_salida);
-
-    if (Number.isNaN(fechaSalida.getTime())) {
-      return res.status(400).json({
-        mensaje: "La fecha y hora de salida no son válidas.",
-      });
-    }
-
-    const { data: pasajero, error: errorPasajero } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("id, rol")
-        .eq("id", pasajero_id)
-        .maybeSingle();
-
-    if (errorPasajero) {
-      throw errorPasajero;
-    }
-
-    if (!pasajero) {
-      return res.status(404).json({
-        mensaje: "No se encontró el perfil del pasajero.",
-      });
-    }
-
-    if (pasajero.rol !== "pasajero") {
-      return res.status(403).json({
-        mensaje:
-          "Solo los usuarios con rol de pasajero pueden registrar solicitudes de viaje nuevo.",
-      });
-    }
-
-    const { data, error } = await dbClient
-      .from("solicitudes_viajes_nuevos")
-      .insert({
-        id: crypto.randomUUID(),
-        pasajero_id,
-        origen: String(origen).trim(),
-        destino: String(destino).trim(),
-        lat_origen: Number(lat_origen),
-        lng_origen: Number(lng_origen),
-        lat_destino: Number(lat_destino),
-        lng_destino: Number(lng_destino),
-        fecha_hora_salida,
-        estado: "pendiente",
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return res.status(201).json({
-      mensaje: "Solicitud de viaje nuevo registrada correctamente.",
-      solicitud: data,
-    });
-  } catch (error) {
-    console.error(
-      "Error registrando solicitud de viaje nuevo:",
-      error
-    );
-
-    return res.status(500).json({
-      mensaje: "No fue posible registrar la solicitud de viaje.",
-      detalle: error.message,
-    });
-  }
-});
-
-// ------------------------------------------------------------------
-// 14. CONSULTAR SOLICITUDES PENDIENTES (CONDUCTORES)
-// GET /api/solicitudes-viajes-nuevos
-// ------------------------------------------------------------------
-// CONDUCTOR: consultar solicitudes pendientes no rechazadas por él
-app.get("/api/solicitudes-viajes-nuevos", async (req, res) => {
-  try {
-    const { conductor_id: conductorId } = req.query;
-
-    if (!conductorId) {
-      return res.status(400).json({
-        mensaje: "Debes indicar el ID del conductor.",
-      });
-    }
-
-    // Verificar que el usuario tenga rol de conductor
-    const { data: conductor, error: errorConductor } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("id, rol")
-        .eq("id", conductorId)
-        .maybeSingle();
-
-    if (errorConductor) throw errorConductor;
-
-    if (!conductor || conductor.rol !== "conductor") {
-      return res.status(403).json({
-        mensaje: "Solo los conductores pueden consultar estas solicitudes.",
-      });
-    }
-
-    // Consultar solicitudes que todavía no han sido aceptadas
-    const { data: solicitudes, error } = await supabaseAdmin
-      .from("solicitudes_viajes_nuevos")
-      .select(`
-        id,
-        pasajero_id,
-        origen,
-        destino,
-        lat_origen,
-        lng_origen,
-        lat_destino,
-        lng_destino,
-        fecha_hora_salida,
-        estado,
-        creado_en,
-        pasajero:profiles!solicitudes_viajes_nuevos_pasajero_id_fkey (
-          id,
-          nombre_completo,
-          telefono,
-          foto_url
-        )
-      `)
-      .eq("estado", "pendiente")
-      .is("conductor_id", null)
-      .order("creado_en", { ascending: false });
-
-    if (error) throw error;
-
-    // Consultar los rechazos realizados por este conductor
-    const { data: rechazos, error: errorRechazos } = await supabaseAdmin
-      .from("solicitudes_viajes_rechazos")
-      .select("solicitud_id")
-      .eq("conductor_id", conductorId);
-
-    if (errorRechazos) throw errorRechazos;
-
-    const solicitudesRechazadas = new Set(
-      (rechazos || []).map((rechazo) => rechazo.solicitud_id)
-    );
-
-    // Excluir únicamente las solicitudes rechazadas por este conductor
-    const solicitudesDisponibles = (solicitudes || []).filter(
-      (solicitud) => !solicitudesRechazadas.has(solicitud.id)
-    );
-
-    return res.status(200).json(solicitudesDisponibles);
-  } catch (error) {
-    console.error("Error consultando solicitudes de viaje nuevo:", error);
-
-    return res.status(500).json({
-      mensaje: "No fue posible consultar las solicitudes pendientes.",
-      detalle: error.message,
-    });
-  }
-});
-
-
-// ------------------------------------------------------------------
-// 15. CONSULTAR SOLICITUDES DE VIAJE NUEVO DE UN PASAJERO
-// GET /api/solicitudes-viajes-nuevos/pasajero/:id
-// ------------------------------------------------------------------
-
-app.get(
-  "/api/solicitudes-viajes-nuevos/pasajero/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      if (!id || id === "undefined" || id === "null") {
-        return res.status(400).json({
-          mensaje: "El ID del pasajero no es válido.",
-        });
-      }
-
-      const { data, error } = await dbClient
-        .from("solicitudes_viajes_nuevos")
-        .select(`
-    *,
-    conductor:profiles!solicitudes_viajes_nuevos_conductor_id_fkey (
-      id,
-      nombre_completo,
-      telefono,
-      foto_url
-    )
-  `)
-        .eq("pasajero_id", id)
-        .order("creado_en", { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      return res.status(200).json(data || []);
-    } catch (error) {
-      console.error(
-        "Error consultando solicitudes nuevas del pasajero:",
-        error
-      );
-
-      return res.status(500).json({
-        mensaje: "No fue posible consultar tus solicitudes de viaje.",
-        detalle: error.message,
-      });
-    }
-  }
-);
-
-// ------------------------------------------------------------------
-// 16. RESPONDER SOLICITUD DE VIAJE NUEVO
-// PATCH /api/solicitudes-viajes-nuevos/:id/responder
-// ------------------------------------------------------------------
-
-app.patch(
-  "/api/solicitudes-viajes-nuevos/:id/responder",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { conductor_id, accion } = req.body;
-
-      if (!id || !conductor_id || !["aceptar", "rechazar"].includes(accion)) {
-        return res.status(400).json({
-          mensaje: "Los datos para responder la solicitud no son válidos.",
-        });
-      }
-
-      const { data: conductor, error: errorConductor } = await dbClient
-        .from("profiles")
-        .select("id, rol")
-        .eq("id", conductor_id)
-        .maybeSingle();
-
-      if (errorConductor) throw errorConductor;
-
-      if (!conductor || conductor.rol !== "conductor") {
-        return res.status(403).json({
-          mensaje: "Solo un conductor puede responder esta solicitud.",
-        });
-      }
-
-      const actualizacion = {
-        estado: accion === "aceptar" ? "aceptada" : "rechazada",
-        conductor_id: accion === "aceptar" ? conductor_id : null,
-        aceptado_en: accion === "aceptar" ? new Date().toISOString() : null,
-      };
-
-      const { data, error } = await dbClient
-        .from("solicitudes_viajes_nuevos")
-        .update(actualizacion)
-        .eq("id", id)
-        .eq("estado", "pendiente")
-        .select()
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!data) {
-        return res.status(409).json({
-          mensaje: "Esta solicitud ya fue atendida por otro conductor.",
-        });
-      }
-
-      return res.status(200).json({
-        mensaje:
-          accion === "aceptar"
-            ? "Has aceptado la solicitud de viaje."
-            : "Has rechazado la solicitud de viaje.",
-        solicitud: data,
-      });
-    } catch (error) {
-      console.error("Error respondiendo solicitud de viaje:", error);
-
-      return res.status(500).json({
-        mensaje: "No fue posible responder la solicitud.",
-        detalle: error.message,
-      });
-    }
-  }
-);
-
-// ------------------------------------------------------------------
 // MANEJO DE ERRORES DE MULTER
 // ------------------------------------------------------------------
 
@@ -2875,7 +3117,7 @@ app.use((error, req, res, next) => {
 // POST /api/vehiculos
 // ------------------------------------------------------------------
 
-app.post("/api/vehiculos", async (req, res) => {
+app.post("/api/vehiculos", verificarAutenticacion, async (req, res) => {
   try {
     const {
       conductor_id,
@@ -2886,6 +3128,15 @@ app.post("/api/vehiculos", async (req, res) => {
       color,
       capacidad_maxima,
     } = req.body;
+
+    if (
+      conductor_id &&
+      String(conductor_id) !== String(req.usuarioAutenticado.id)
+    ) {
+      return res.status(403).json({
+        mensaje: "No puedes registrar vehículos en nombre de otro usuario.",
+      });
+    }
 
     const tipoVehiculo = tipo?.trim() || "Automóvil";
 
@@ -2972,7 +3223,7 @@ app.post("/api/vehiculos", async (req, res) => {
 // GET /api/vehiculos/:usuarioId
 // ------------------------------------------------------------------
 
-app.get("/api/vehiculos/:usuarioId", async (req, res) => {
+app.get("/api/vehiculos/:usuarioId", verificarAutenticacion, async (req, res) => {
   try {
     const { usuarioId } = req.params;
 
@@ -3013,6 +3264,63 @@ app.get("/api/vehiculos/:usuarioId", async (req, res) => {
 // ------------------------------------------------------------------
 // 18. INICIO DEL SERVIDOR
 // ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// LIMPIEZA AUTOMÁTICA
+// Borra solicitudes vencidas o rechazadas y avisos leídos antiguos
+// para que no estorben ni ocupen espacio.
+// ------------------------------------------------------------------
+
+async function limpiarDatosAntiguos() {
+  try {
+    const ahora = ahoraColombiaMs();
+    const iso = (ms) => new Date(ms).toISOString().slice(0, 19);
+
+    // 1. Viajes nuevos pendientes cuya hora ya pasó (1 hora de gracia).
+    const { data: vencidas } = await dbClient
+      .from("solicitudes_viajes_nuevos")
+      .select("id")
+      .eq("estado", "pendiente")
+      .lt("fecha_hora_salida", iso(ahora - 60 * 60000))
+      .limit(200);
+
+    const idsVencidas = (vencidas || []).map((x) => x.id);
+
+    if (idsVencidas.length) {
+      await dbClient.from("solicitudes_viajes_rechazos").delete().in("solicitud_id", idsVencidas);
+      await dbClient.from("negociaciones_tarifa").delete().in("solicitud_id", idsVencidas);
+      await dbClient.from("notificaciones").delete().in("solicitud_id", idsVencidas);
+      await dbClient.from("solicitudes_viajes_nuevos").delete().in("id", idsVencidas);
+    }
+
+    // 2. Cupos rechazados hace más de 3 días.
+    const { data: rechazadas } = await dbClient
+      .from("solicitudes_viaje")
+      .select("id")
+      .eq("estado", "rechazada")
+      .lt("fecha_solicitud", new Date(Date.now() - 3 * 86400000).toISOString())
+      .limit(200);
+
+    const idsRechazadas = (rechazadas || []).map((x) => x.id);
+
+    if (idsRechazadas.length) {
+      await dbClient.from("notificaciones").delete().in("solicitud_id", idsRechazadas);
+      await dbClient.from("solicitudes_viaje").delete().in("id", idsRechazadas);
+    }
+
+    // 3. Notificaciones leídas con más de 30 días.
+    await dbClient
+      .from("notificaciones")
+      .delete()
+      .eq("leida", true)
+      .lt("fecha_creacion", new Date(Date.now() - 30 * 86400000).toISOString());
+  } catch (error) {
+    console.error("Error en la limpieza automática:", error);
+  }
+}
+
+setTimeout(limpiarDatosAntiguos, 15000);
+setInterval(limpiarDatosAntiguos, 30 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(

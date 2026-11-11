@@ -3,8 +3,14 @@ import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-lea
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./SolicitarViajeNuevo.css";
+import BuscadorUbicacion from "../components/BuscadorUbicacion";
+import {
+  buscarMejorLugar,
+  nombreDesdeCoordenadas,
+  CENTRO_MEDELLIN,
+} from "../utils/geocodificacion";
 
-const CENTRO = [6.2442, -75.5812];
+const CENTRO = [CENTRO_MEDELLIN.lat, CENTRO_MEDELLIN.lng];
 
 const icono = new L.DivIcon({
   className: "marcador-viaje-nuevo",
@@ -20,7 +26,7 @@ function AjustarMapa({ origen, destino }) {
     if (puntos.length === 2) {
       mapa.fitBounds(puntos, { padding: [35, 35], maxZoom: 14 });
     } else if (puntos.length === 1) {
-      mapa.setView(puntos[0], 14);
+      mapa.setView(puntos[0], 15);
     }
   }, [mapa, origen, destino]);
   return null;
@@ -43,6 +49,9 @@ export default function SolicitarViajeNuevo({
   const [destino, setDestino] = useState("");
   const [coordOrigen, setCoordOrigen] = useState(null);
   const [coordDestino, setCoordDestino] = useState(null);
+  const [textoOrigenConfirmado, setTextoOrigenConfirmado] = useState("");
+  const [textoDestinoConfirmado, setTextoDestinoConfirmado] = useState("");
+  const [tipoViaje, setTipoViaje] = useState("reserva"); // "inmediato" | "reserva"
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
   const [modoMapa, setModoMapa] = useState("origen");
@@ -57,6 +66,20 @@ export default function SolicitarViajeNuevo({
     return local.toISOString().slice(0, 10);
   }, []);
 
+  const fijarUbicacion = (tipo, lugar) => {
+    const punto = [lugar.lat, lugar.lng];
+    if (tipo === "origen") {
+      setOrigen(lugar.nombre);
+      setCoordOrigen(punto);
+      setTextoOrigenConfirmado(lugar.nombre);
+    } else {
+      setDestino(lugar.nombre);
+      setCoordDestino(punto);
+      setTextoDestinoConfirmado(lugar.nombre);
+    }
+  };
+
+  // Botón "Ubicar": usa el mejor resultado cercano a Medellín.
   const buscarCoordenadas = async (tipo) => {
     const texto = tipo === "origen" ? origen : destino;
     if (!texto.trim()) {
@@ -66,13 +89,8 @@ export default function SolicitarViajeNuevo({
     setBuscando(tipo);
     setError("");
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(texto + ", Colombia")}`;
-      const respuesta = await fetch(url, { headers: { "Accept-Language": "es" } });
-      const resultados = await respuesta.json();
-      if (!resultados.length) throw new Error("No se encontró esa ubicación. Prueba con una dirección más específica.");
-      const punto = [Number(resultados[0].lat), Number(resultados[0].lon)];
-      if (tipo === "origen") setCoordOrigen(punto);
-      else setCoordDestino(punto);
+      const lugar = await buscarMejorLugar(texto);
+      fijarUbicacion(tipo, lugar);
     } catch (e) {
       setError(e.message || "No fue posible ubicar el lugar.");
     } finally {
@@ -80,9 +98,35 @@ export default function SolicitarViajeNuevo({
     }
   };
 
-  const seleccionarEnMapa = (tipo, punto) => {
+  // Clic en el mapa: se marca el punto y se escribe su dirección.
+  const seleccionarEnMapa = async (tipo, punto) => {
     if (tipo === "origen") setCoordOrigen(punto);
     else setCoordDestino(punto);
+
+    const nombre = await nombreDesdeCoordenadas(punto[0], punto[1]);
+    fijarUbicacion(tipo, { lat: punto[0], lng: punto[1], nombre });
+  };
+
+  const usarMiUbicacion = () => {
+    if (!navigator.geolocation) {
+      setError("Tu navegador no permite obtener la ubicación.");
+      return;
+    }
+    setError("");
+    setBuscando("origen");
+    navigator.geolocation.getCurrentPosition(
+      async (posicion) => {
+        const { latitude, longitude } = posicion.coords;
+        const nombre = await nombreDesdeCoordenadas(latitude, longitude);
+        fijarUbicacion("origen", { lat: latitude, lng: longitude, nombre });
+        setBuscando("");
+      },
+      () => {
+        setError("No fue posible obtener tu ubicación. Revisa los permisos del navegador.");
+        setBuscando("");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   };
 
   const guardarSolicitud = async (evento) => {
@@ -96,11 +140,14 @@ export default function SolicitarViajeNuevo({
       return;
     }
     if (!coordOrigen || !coordDestino) {
-      setError("Ubica el origen y el destino en el mapa antes de continuar.");
+      setError("Elige el origen y el destino de la lista de sugerencias o márcalos en el mapa.");
       return;
     }
+
+    const inmediato = tipoViaje === "inmediato";
     const fechaHora = `${fecha}T${hora}:00`;
-    if (new Date(fechaHora) <= new Date()) {
+
+    if (!inmediato && new Date(fechaHora) <= new Date()) {
       setError("La fecha y hora del viaje deben ser futuras.");
       return;
     }
@@ -118,17 +165,24 @@ export default function SolicitarViajeNuevo({
           lng_origen: coordOrigen[1],
           lat_destino: coordDestino[0],
           lng_destino: coordDestino[1],
-          fecha_hora_salida: fechaHora,
+          inmediato,
+          ...(inmediato ? {} : { fecha_hora_salida: fechaHora }),
         }),
       });
       const datos = await respuesta.json().catch(() => ({}));
       if (!respuesta.ok) throw new Error(datos.mensaje || datos.error || "No fue posible registrar la solicitud.");
+
       setMensaje(
-        "Tu solicitud fue publicada. Puedes consultar su estado en Mis solicitudes; te mostraremos cuando un conductor la acepte."
-      ); setOrigen("");
+        datos.conductores_avisados > 0
+          ? `Tu solicitud fue publicada y avisamos a ${datos.conductores_avisados} conductor(es). Te notificaremos cuando uno la acepte.`
+          : "Tu solicitud fue publicada. Por ahora no hay conductores disponibles en ese horario; seguirá visible para quienes se conecten."
+      );
+      setOrigen("");
       setDestino("");
       setCoordOrigen(null);
       setCoordDestino(null);
+      setTextoOrigenConfirmado("");
+      setTextoDestinoConfirmado("");
       setFecha("");
       setHora("");
     } catch (e) {
@@ -137,6 +191,8 @@ export default function SolicitarViajeNuevo({
       setGuardando(false);
     }
   };
+
+  const inmediato = tipoViaje === "inmediato";
 
   return (
     <section className="viaje-nuevo pagina-contenido">
@@ -147,45 +203,89 @@ export default function SolicitarViajeNuevo({
       </header>
 
       <form className="viaje-nuevo-panel" onSubmit={guardarSolicitud}>
+        <div className="viaje-nuevo-tipo" role="radiogroup" aria-label="Tipo de viaje">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={inmediato}
+            className={inmediato ? "activo" : ""}
+            onClick={() => setTipoViaje("inmediato")}
+          >
+            <strong>Ahora</strong>
+            <span>Salgo en unos minutos</span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!inmediato}
+            className={!inmediato ? "activo" : ""}
+            onClick={() => setTipoViaje("reserva")}
+          >
+            <strong>Reservar</strong>
+            <span>Elijo fecha y hora</span>
+          </button>
+        </div>
+
         <div className="viaje-nuevo-campos">
           <label>
             Origen
             <div className="viaje-nuevo-ubicacion">
-              <input value={origen} onChange={(e) => { setOrigen(e.target.value); setCoordOrigen(null); }} placeholder="Ej. Bello, Antioquia" required />
+              <BuscadorUbicacion
+                valor={origen}
+                textoConfirmado={textoOrigenConfirmado}
+                placeholder="Ej. Calle 80 #45-10, Robledo, Medellín"
+                alCambiarTexto={(texto) => { setOrigen(texto); setCoordOrigen(null); }}
+                alSeleccionar={(lugar) => fijarUbicacion("origen", lugar)}
+                requerido
+              />
               <button type="button" onClick={() => buscarCoordenadas("origen")} disabled={buscando === "origen"}>{buscando === "origen" ? "Buscando..." : "Ubicar"}</button>
             </div>
-            {coordOrigen && <small className="ubicacion-confirmada">Origen ubicado en el mapa</small>}
+            <button type="button" className="viaje-nuevo-gps" onClick={usarMiUbicacion} disabled={buscando === "origen"}>
+              ◎ Usar mi ubicación actual
+            </button>
+            {coordOrigen && <small className="ubicacion-confirmada">✓ Origen ubicado en el mapa</small>}
           </label>
 
           <label>
             Destino
             <div className="viaje-nuevo-ubicacion">
-              <input value={destino} onChange={(e) => { setDestino(e.target.value); setCoordDestino(null); }} placeholder="Ej. Tecnológico de Antioquia" required />
+              <BuscadorUbicacion
+                valor={destino}
+                textoConfirmado={textoDestinoConfirmado}
+                placeholder="Ej. Tecnológico de Antioquia, Robledo"
+                alCambiarTexto={(texto) => { setDestino(texto); setCoordDestino(null); }}
+                alSeleccionar={(lugar) => fijarUbicacion("destino", lugar)}
+                requerido
+              />
               <button type="button" onClick={() => buscarCoordenadas("destino")} disabled={buscando === "destino"}>{buscando === "destino" ? "Buscando..." : "Ubicar"}</button>
             </div>
-            {coordDestino && <small className="ubicacion-confirmada">Destino ubicado en el mapa</small>}
+            {coordDestino && <small className="ubicacion-confirmada">✓ Destino ubicado en el mapa</small>}
           </label>
 
-          <label>
-            Fecha de salida
-            <input type="date" min={fechaMinima} value={fecha} onChange={(e) => setFecha(e.target.value)} required />
-          </label>
-          <label>
-            Hora de salida
-            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
-          </label>
+          {!inmediato && (
+            <>
+              <label>
+                Fecha de salida
+                <input type="date" min={fechaMinima} value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+              </label>
+              <label>
+                Hora de salida
+                <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
+              </label>
+            </>
+          )}
         </div>
 
         <div className="viaje-nuevo-mapa-ayuda">
           <strong>Confirma las ubicaciones en el mapa</strong>
-          <span>Selecciona primero qué punto deseas marcar y después haz clic en el mapa.</span>
+          <span>Escribe la dirección y elige una sugerencia, o marca el punto exacto en el mapa.</span>
           <div className="viaje-nuevo-modos">
             <button type="button" className={modoMapa === "origen" ? "activo" : ""} onClick={() => setModoMapa("origen")}>Marcar origen</button>
             <button type="button" className={modoMapa === "destino" ? "activo" : ""} onClick={() => setModoMapa("destino")}>Marcar destino</button>
           </div>
         </div>
 
-        <MapContainer center={CENTRO} zoom={11} scrollWheelZoom className="viaje-nuevo-mapa">
+        <MapContainer center={CENTRO} zoom={12} scrollWheelZoom className="viaje-nuevo-mapa">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -205,7 +305,11 @@ export default function SolicitarViajeNuevo({
         {mensaje && <p className="viaje-nuevo-mensaje exito" role="status">{mensaje}</p>}
 
         <button className="viaje-nuevo-enviar" type="submit" disabled={guardando}>
-          {guardando ? "Registrando solicitud..." : "Publicar solicitud de viaje"}
+          {guardando
+            ? "Registrando solicitud..."
+            : inmediato
+              ? "Pedir viaje ahora"
+              : "Publicar reserva de viaje"}
         </button>
       </form>
     </section>

@@ -715,7 +715,7 @@ app.put(
           await dbClient
             .from("vehiculos")
             .select("id")
-            .eq("usuario_id", idAutenticado)
+            .eq("usuario_id", perfil.id)
             .maybeSingle();
 
         if (errorVehiculo) {
@@ -3129,9 +3129,44 @@ app.post("/api/vehiculos", verificarAutenticacion, async (req, res) => {
       capacidad_maxima,
     } = req.body;
 
+    // Identificar el perfil correspondiente al usuario autenticado.
+    let { data: perfilAutenticado, error: errorPerfil } =
+      await dbClient
+        .from("profiles")
+        .select("id")
+        .eq("id", req.usuarioAutenticado.id)
+        .maybeSingle();
+
+    if (errorPerfil) {
+      throw errorPerfil;
+    }
+
+    // Si el ID de Auth no coincide, buscar el perfil por correo.
+    if (!perfilAutenticado && req.usuarioAutenticado.email) {
+      const { data: perfilCorreo, error: errorCorreo } =
+        await dbClient
+          .from("profiles")
+          .select("id")
+          .ilike("correo", req.usuarioAutenticado.email)
+          .maybeSingle();
+
+      if (errorCorreo) {
+        throw errorCorreo;
+      }
+
+      perfilAutenticado = perfilCorreo;
+    }
+
+    if (!perfilAutenticado) {
+      return res.status(404).json({
+        mensaje: "No se encontró tu perfil de usuario.",
+      });
+    }
+
+    // Comprobar que el vehículo pertenezca al perfil autenticado.
     if (
-      conductor_id &&
-      String(conductor_id) !== String(req.usuarioAutenticado.id)
+      !conductor_id ||
+      String(conductor_id) !== String(perfilAutenticado.id)
     ) {
       return res.status(403).json({
         mensaje: "No puedes registrar vehículos en nombre de otro usuario.",
@@ -3186,7 +3221,7 @@ app.post("/api/vehiculos", verificarAutenticacion, async (req, res) => {
       .upsert(
         [
           {
-            usuario_id: conductor_id,
+            usuario_id: perfilAutenticado.id,
             tipo: tipoVehiculo,
             clasificacion_tarifa: clasificacionFinal,
             marca_modelo: marca_modelo.trim(),

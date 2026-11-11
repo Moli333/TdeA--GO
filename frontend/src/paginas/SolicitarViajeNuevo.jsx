@@ -766,7 +766,7 @@ export default function SolicitarViajeNuevo({
                 </div>
 
                 <div className="viaje-nuevo-tarifa">
-                  <h3>Tarifa de referencia del proyecto</h3>
+                  <h3>Tarifa estimada</h3>
 
                   <p>
                     El aporte definitivo dependerá del tipo de vehículo y de las condiciones acordadas con el conductor.

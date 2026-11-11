@@ -26,7 +26,24 @@ function MiCuenta({
   const urlPreviaRef = useRef(null);
 
   const idUsuario = usuario?.id || usuario?.id_usuario;
-  const fotoActual = vistaPrevia || usuario?.foto_url || null;
+
+  const tokenSesion = (() => {
+    try {
+      const sesionGuardada = JSON.parse(
+        sessionStorage.getItem("tdea_go_usuario") || "{}"
+      );
+
+      return (
+        usuario?.token ||
+        usuario?.access_token ||
+        sesionGuardada?.token ||
+        sesionGuardada?.access_token ||
+        null
+      );
+    } catch {
+      return usuario?.token || usuario?.access_token || null;
+    }
+  })(); const fotoActual = vistaPrevia || usuario?.foto_url || null;
 
   const nombreUsuario =
     usuario?.nombre_completo || usuario?.nombre || "Usuario";
@@ -396,13 +413,29 @@ function MiCuenta({
     }
   }
 
+
   async function manejarVehiculoRegistrado(vehiculoRegistrado) {
     try {
       setMensajeFoto("");
       setTipoMensajeFoto("");
 
+      if (!idUsuario || !tokenSesion) {
+        throw new Error(
+          "No se pudo recuperar tu sesión. Cierra sesión e inicia nuevamente."
+        );
+      }
+
+      const encabezadosAutenticacion = {
+        Authorization: `Bearer ${tokenSesion}`,
+      };
+
+      // Consultar el vehículo ya registrado.
       const respuestaVehiculo = await fetch(
-        `${API_URL}/api/vehiculos/${encodeURIComponent(idUsuario)}`
+        `${API_URL}/api/vehiculos/${encodeURIComponent(idUsuario)}`,
+        {
+          method: "GET",
+          headers: encabezadosAutenticacion,
+        }
       );
 
       const datosVehiculo = await respuestaVehiculo.json();
@@ -419,15 +452,17 @@ function MiCuenta({
 
       if (!vehiculoActual) {
         throw new Error(
-          "El vehículo se registró, pero no fue posible recuperarlo de la base de datos."
+          "No se encontró un vehículo asociado a tu cuenta."
         );
       }
 
+      // Activar el rol de conductor.
       const respuestaRol = await fetch(
         `${API_URL}/api/usuarios/${encodeURIComponent(idUsuario)}/rol`,
         {
           method: "PUT",
           headers: {
+            ...encabezadosAutenticacion,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -445,25 +480,44 @@ function MiCuenta({
         );
       }
 
-      actualizarUsuario?.({
-        ...(datosRol.usuario || usuario),
+      const usuarioActualizado = {
+        ...usuario,
+        ...(datosRol.usuario || {}),
         rol: "conductor",
         rol_solicitado: "conductor",
         requiere_vehiculo: false,
         vehiculo: datosRol.usuario?.vehiculo || vehiculoActual,
-      });
+      };
 
-      setMensajeFoto("Vehículo reconocido y rol de conductor activado correctamente.");
+      actualizarUsuario?.(usuarioActualizado);
+
+      sessionStorage.setItem(
+        "tdea_go_usuario",
+        JSON.stringify({
+          ...usuarioActualizado,
+          token: tokenSesion,
+        })
+      );
+
+      setMensajeFoto(
+        "Vehículo reconocido y rol de conductor activado correctamente."
+      );
       setTipoMensajeFoto("exito");
 
-      console.log("Vehículo reconocido correctamente:", vehiculoActual);
     } catch (error) {
-      console.error("Error al actualizar el vehículo o el rol:", error);
+      console.error(
+        "Error al actualizar el vehículo o el rol:",
+        error
+      );
 
-      setMensajeFoto(error.message || "No fue posible actualizar la información del vehículo.");
+      setMensajeFoto(
+        error.message ||
+        "No fue posible actualizar la información del vehículo."
+      );
       setTipoMensajeFoto("error");
     }
   }
+
 
   if (!usuario) {
     return (
@@ -691,8 +745,12 @@ function MiCuenta({
                 <h2>Información del vehículo</h2>
               </div>
 
+
+
+
               <RegistrarVehiculo
                 usuarioId={idUsuario}
+                token={tokenSesion}
                 API_URL={API_URL}
                 onVehiculoRegistrado={manejarVehiculoRegistrado}
               />

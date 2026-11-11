@@ -5,8 +5,26 @@ import "./RegistrarVehiculo.css";
 const API_URL_PREDETERMINADA =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+function obtenerTokenSesion() {
+  try {
+    const sesion = JSON.parse(
+      sessionStorage.getItem("tdea_go_usuario") || "{}"
+    );
+
+    return (
+      sesion?.token ||
+      sesion?.access_token ||
+      sesion?.session?.access_token ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 function RegistrarVehiculo({
   usuarioId,
+  token,
   API_URL = API_URL_PREDETERMINADA,
   onVehiculoRegistrado,
 }) {
@@ -33,16 +51,28 @@ function RegistrarVehiculo({
       if (!usuarioId) {
         setVehiculo(null);
         setCargandoVehiculo(false);
-        setError(
-          "No se identificó al usuario. Cierra sesión e inicia sesión nuevamente si el problema continúa."
-        );
+        setError("No se identificó al usuario.");
         return;
       }
 
       try {
+        const tokenAutenticacion = token || obtenerTokenSesion();
+
+        if (!tokenAutenticacion) {
+          throw new Error(
+            "No se encontró una sesión válida. Cierra sesión e inicia nuevamente."
+          );
+        }
+
         const respuesta = await fetch(
-          `${API_URL}/api/vehiculos/${encodeURIComponent(usuarioId)}`
+          `${API_URL}/api/vehiculos/${encodeURIComponent(usuarioId)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${tokenAutenticacion}`,
+            },
+          }
         );
+
         const datos = await respuesta.json();
 
         if (!respuesta.ok) {
@@ -122,9 +152,20 @@ function RegistrarVehiculo({
     try {
       setCargando(true);
 
+      const tokenAutenticacion = token || obtenerTokenSesion();
+
+      if (!tokenAutenticacion) {
+        throw new Error(
+          "No se encontró una sesión válida. Cierra sesión e inicia nuevamente."
+        );
+      }
+
       const respuesta = await fetch(`${API_URL}/api/vehiculos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenAutenticacion}`,
+        },
         body: JSON.stringify({
           conductor_id: usuarioId,
           tipo,
@@ -276,7 +317,6 @@ function RegistrarVehiculo({
               value={tipo}
               onChange={(evento) => {
                 setTipo(evento.target.value);
-
                 if (evento.target.value !== "Otro") {
                   setClasificacionTarifa("");
                 }
@@ -369,7 +409,9 @@ function RegistrarVehiculo({
               placeholder="Ej. 4"
               required
             />
-            <small>Incluye únicamente los pasajeros que puede transportar.</small>
+            <small>
+              Incluye únicamente los pasajeros que puede transportar.
+            </small>
           </div>
         </div>
 

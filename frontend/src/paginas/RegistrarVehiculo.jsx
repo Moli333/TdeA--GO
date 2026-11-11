@@ -115,7 +115,7 @@ function RegistrarVehiculo({
     return () => {
       activo = false;
     };
-  }, [usuarioId, API_URL]);
+  }, [usuarioId, API_URL, token]);
 
   async function guardarVehiculo(evento) {
     evento.preventDefault();

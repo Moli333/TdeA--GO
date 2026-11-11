@@ -33,6 +33,47 @@ const ADMINISTRADORA_PRINCIPAL_ID =
   "2f1ea263-8be4-48be-99f7-b75e4408265f";
 
 // Verificar que la solicitud venga de una cuenta autenticada.
+const cachePerfilPorAuth = new Map();
+const VIDA_CACHE_PERFIL_MS = 5 * 60 * 1000;
+
+async function resolverIdPerfil(usuarioAuth) {
+  const guardado = cachePerfilPorAuth.get(usuarioAuth.id);
+
+  if (guardado && guardado.expira > Date.now()) {
+    return guardado.perfilId;
+  }
+
+  try {
+    let { data: perfil } = await dbClient
+      .from("profiles")
+      .select("id")
+      .eq("id", usuarioAuth.id)
+      .maybeSingle();
+
+    if (!perfil && usuarioAuth.email) {
+      const { data: porCorreo } = await dbClient
+        .from("profiles")
+        .select("id")
+        .ilike("correo", usuarioAuth.email)
+        .maybeSingle();
+
+      perfil = porCorreo;
+    }
+
+    if (perfil?.id) {
+      cachePerfilPorAuth.set(usuarioAuth.id, {
+        perfilId: perfil.id,
+        expira: Date.now() + VIDA_CACHE_PERFIL_MS,
+      });
+      return perfil.id;
+    }
+  } catch (error) {
+    console.error("Error resolviendo el perfil del usuario:", error);
+  }
+
+  return null;
+}
+
 async function verificarAutenticacion(req, res, next) {
   try {
     const encabezado = req.headers.authorization || "";
@@ -54,7 +95,17 @@ async function verificarAutenticacion(req, res, next) {
       });
     }
 
-    req.usuarioAutenticado = data.user;
+    // Algunas cuentas tienen un ID en Auth distinto al de su perfil
+    // (el login ya las resuelve por correo). Todas las tablas usan el
+    // ID del perfil, así que se expone ese como "id" y se conserva el
+    // original en "auth_id".
+    const perfilId = await resolverIdPerfil(data.user);
+
+    req.usuarioAutenticado = {
+      ...data.user,
+      auth_id: data.user.id,
+      id: perfilId || data.user.id,
+    };
     next();
   } catch (error) {
     console.error("Error verificando autenticación:", error);
@@ -500,6 +551,7 @@ app.post("/api/login", async (req, res) => {
     return res.status(200).json({
       mensaje: "Inicio de sesión exitoso.",
       token: authData.session?.access_token,
+      refresh_token: authData.session?.refresh_token,
       usuario: {
         ...profile,
         rol_solicitado: rolSolicitado,
@@ -514,6 +566,45 @@ app.post("/api/login", async (req, res) => {
     return res.status(500).json({
       mensaje:
         "Error interno del servidor al iniciar sesión.",
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// RENOVAR SESIÓN
+// POST /api/refrescar-sesion
+// Cambia un refresh_token válido por un token de acceso nuevo, para
+// que la sesión no se corte cuando el token vence (dura 1 hora).
+// ------------------------------------------------------------------
+
+app.post("/api/refrescar-sesion", async (req, res) => {
+  try {
+    const { refresh_token } = req.body || {};
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        mensaje: "Falta el token de renovación.",
+      });
+    }
+
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token,
+    });
+
+    if (error || !data?.session) {
+      return res.status(401).json({
+        mensaje: "La sesión expiró. Inicia sesión nuevamente.",
+      });
+    }
+
+    return res.json({
+      token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  } catch (error) {
+    console.error("Error renovando sesión:", error);
+    return res.status(401).json({
+      mensaje: "No fue posible renovar la sesión.",
     });
   }
 });

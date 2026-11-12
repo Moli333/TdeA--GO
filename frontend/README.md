@@ -132,17 +132,8 @@ La arquitectura general está compuesta por los siguientes elementos:
 
 ### Diagrama general de arquitectura
 
-## Diagrama de arquitectura
+<img width="688" height="586" alt="image" src="https://github.com/user-attachments/assets/87c44fd1-b980-4c7d-8420-4140d4c26873" />
 
-<p align="center">
-  <img
-    src="docs/imagenes/diagramaDeArquitecturaTdeA-GO.png"
-    alt="Diagrama de arquitectura de TdeA GO"
-    width="850"
-  />
-</p>
-
-```text
               USUARIO
                  |
                  v

@@ -1,7 +1,4 @@
- vehículo antes de publicar una ruta.",
-        requiereVehiculo: true,
-      });
-    }import express from "express";
+import express from "express";
 import cors from "cors";
 import multer from "multer";
 import crypto from "crypto";
@@ -1631,7 +1628,10 @@ app.post("/api/rutas", verificarAutenticacion, async (req, res) => {
     if (!vehiculoConductor) {
       return res.status(403).json({
         mensaje:
-          "Registra tu
+          "Registra tu vehículo antes de publicar una ruta.",
+        requiereVehiculo: true,
+      });
+    }
 
     // Determinar automáticamente la clasificación tarifaria
     // a partir del vehículo registrado por el conductor.

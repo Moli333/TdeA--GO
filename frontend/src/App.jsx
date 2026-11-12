@@ -283,6 +283,35 @@ function Aplicacion() {
     navegar("/");
   };
 
+  // Renovación y vencimiento de sesión (los emite utils/fetchConToken.js).
+  const accionesSesionRef = useRef({});
+
+  useEffect(() => {
+    accionesSesionRef.current = { actualizarUsuario, cerrarSesion };
+  });
+
+  useEffect(() => {
+    const alRenovar = (evento) => {
+      accionesSesionRef.current.actualizarUsuario?.({
+        token: evento.detail?.token,
+        refresh_token: evento.detail?.refresh_token,
+      });
+    };
+
+    const alExpirar = () => {
+      accionesSesionRef.current.cerrarSesion?.();
+      setMostrarLogin(true);
+    };
+
+    window.addEventListener("tdea:token-renovado", alRenovar);
+    window.addEventListener("tdea:sesion-expirada", alExpirar);
+
+    return () => {
+      window.removeEventListener("tdea:token-renovado", alRenovar);
+      window.removeEventListener("tdea:sesion-expirada", alExpirar);
+    };
+  }, []);
+
   const cambiarRol = async (nuevoRol) => {
     if (!usuario || cambiandoRol) return;
 

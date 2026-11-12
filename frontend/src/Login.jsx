@@ -70,6 +70,7 @@ function Login({ onLoginExitoso }) {
         onLoginExitoso({
           ...datos.usuario,
           token: datos.token,
+          refresh_token: datos.refresh_token,
         });
       }
     } catch (error) {

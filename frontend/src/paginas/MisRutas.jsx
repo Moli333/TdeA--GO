@@ -189,10 +189,10 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   const [error, setError] = useState("");
   const [errorSolicitudes, setErrorSolicitudes] = useState("");
   const [archivoPersonal, setArchivoPersonal] = useState({
-  reservas: [],
-  rutas: [],
-  solicitudes: [],
-});
+    reservas: [],
+    rutas: [],
+    solicitudes: [],
+  });
 
   useEffect(() => {
     if (!usuario?.id) return;
@@ -314,36 +314,36 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
     };
 
     const cargarArchivoPersonal = async () => {
-  try {
-    const token = usuario?.token || usuario?.access_token;
+      try {
+        const token = usuario?.token || usuario?.access_token;
 
-    if (!token) {
-      throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
-    }
+        if (!token) {
+          throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
+        }
 
-    const respuesta = await fetch(`${API_URL}/api/archivo`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+        const respuesta = await fetch(`${API_URL}/api/archivo`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-    const datos = await respuesta.json();
+        const datos = await respuesta.json();
 
-    if (!respuesta.ok) {
-      throw new Error(datos.mensaje || "No fue posible consultar tu archivo personal.");
-    }
+        if (!respuesta.ok) {
+          throw new Error(datos.mensaje || "No fue posible consultar tu archivo personal.");
+        }
 
-    if (!cancelado) {
-      setArchivoPersonal({
-        reservas: datos.reservas || [],
-        rutas: datos.rutas || [],
-        solicitudes: datos.solicitudes || [],
-      });
-    }
-  } catch (error) {
-    console.error("Error al cargar el archivo personal:", error);
-  }
-};
+        if (!cancelado) {
+          setArchivoPersonal({
+            reservas: datos.reservas || [],
+            rutas: datos.rutas || [],
+            solicitudes: datos.solicitudes || [],
+          });
+        }
+      } catch (error) {
+        console.error("Error al cargar el archivo personal:", error);
+      }
+    };
 
     cargarRutas();
     cargarSolicitudesNuevas();
@@ -359,78 +359,78 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   }, [usuario?.id, API_URL]);
 
   const estaArchivada = (lista, campoId, id) =>
-  lista.some(
-    (item) =>
-      String(item[campoId]) === String(id) &&
-      ["historial", "papelera"].includes(item.ubicacion)
-  );
-
-const reservasVisibles = reservas.filter(
-  (item) => !estaArchivada(archivoPersonal.reservas, "solicitud_id", item.id)
-);
-
-const solicitudesNuevasVisibles = solicitudesNuevas.filter(
-  (item) => !estaArchivada(archivoPersonal.solicitudes, "solicitud_id", item.id)
-);
-
-const rutasVisibles = rutas.filter(
-  (item) => !estaArchivada(
-    archivoPersonal.rutas,
-    "ruta_id",
-    item.id ?? item.id_ruta
-  )
-);
-
-const rutasOrdenadas = useMemo(
-  () =>
-    [...rutasVisibles].sort((a, b) => {
-      const fechaA = a.fecha_hora_salida || a.fechaHoraSalida || a.fecha_salida || "";
-      const fechaB = b.fecha_hora_salida || b.fechaHoraSalida || b.fecha_salida || "";
-      return new Date(fechaA) - new Date(fechaB);
-    }),
-  [rutasVisibles]
-);
-
-const archivarTarjeta = async (tipo, id) => {
-  try {
-    const token = usuario?.token || usuario?.access_token;
-
-    if (!token) {
-      throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
-    }
-
-    const respuesta = await fetch(
-      `${API_URL}/api/archivo/${tipo}/${encodeURIComponent(id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ accion: "archivar" }),
-      }
+    lista.some(
+      (item) =>
+        String(item[campoId]) === String(id) &&
+        ["historial", "papelera"].includes(item.ubicacion)
     );
 
-    const datos = await respuesta.json();
+  const reservasVisibles = reservas.filter(
+    (item) => !estaArchivada(archivoPersonal.reservas, "solicitud_id", item.id)
+  );
 
-    if (!respuesta.ok) {
-      throw new Error(datos.mensaje || "No fue posible archivar la tarjeta.");
+  const solicitudesNuevasVisibles = solicitudesNuevas.filter(
+    (item) => !estaArchivada(archivoPersonal.solicitudes, "solicitud_id", item.id)
+  );
+
+  const rutasVisibles = rutas.filter(
+    (item) => !estaArchivada(
+      archivoPersonal.rutas,
+      "ruta_id",
+      item.id ?? item.id_ruta
+    )
+  );
+
+  const rutasOrdenadas = useMemo(
+    () =>
+      [...rutasVisibles].sort((a, b) => {
+        const fechaA = a.fecha_hora_salida || a.fechaHoraSalida || a.fecha_salida || "";
+        const fechaB = b.fecha_hora_salida || b.fechaHoraSalida || b.fecha_salida || "";
+        return new Date(fechaA) - new Date(fechaB);
+      }),
+    [rutasVisibles]
+  );
+
+  const archivarTarjeta = async (tipo, id) => {
+    try {
+      const token = usuario?.token || usuario?.access_token;
+
+      if (!token) {
+        throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
+      }
+
+      const respuesta = await fetch(
+        `${API_URL}/api/archivo/${tipo}/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ accion: "archivar" }),
+        }
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(datos.mensaje || "No fue posible archivar la tarjeta.");
+      }
+
+      const campoId = tipo === "rutas" ? "ruta_id" : "solicitud_id";
+
+      setArchivoPersonal((anterior) => ({
+        ...anterior,
+        [tipo]: [
+          ...anterior[tipo],
+          { [campoId]: id, ubicacion: "historial" },
+        ],
+      }));
+    } catch (error) {
+      console.error("Error al archivar tarjeta:", error);
+      alert(error.message || "No fue posible archivar la tarjeta.");
     }
-
-    const campoId = tipo === "rutas" ? "ruta_id" : "solicitud_id";
-
-    setArchivoPersonal((anterior) => ({
-      ...anterior,
-      [tipo]: [
-        ...anterior[tipo],
-        { [campoId]: id, ubicacion: "historial" },
-      ],
-    }));
-  } catch (error) {
-    console.error("Error al archivar tarjeta:", error);
-    alert(error.message || "No fue posible archivar la tarjeta.");
-  }
-};
+  };
 
   const obtenerFecha = (fecha) => {
     if (!fecha) return "Fecha no disponible";
@@ -597,9 +597,9 @@ const archivarTarjeta = async (tipo, id) => {
           </div>
 
           <div className="resumen-rutas">
-            <span className="resumen-numero">{rutasvisibles.length}</span>
+            <span className="resumen-numero">{rutasVisibles.length}</span>
             <span className="resumen-texto">
-              {rutasvisibles.length === 1 ? "ruta publicada" : "rutas publicadas"}
+              {rutasVisibles.length === 1 ? "ruta publicada" : "rutas publicadas"}
             </span>
           </div>
         </div>
@@ -656,7 +656,7 @@ const archivarTarjeta = async (tipo, id) => {
 
           {!cargandoReservas && !errorReservas && reservasVisibles.length > 0 && (
             <div className="solicitudes-nuevas-lista">
-              {reservasvisibles.map((solicitud, indice) => {
+              {reservasVisibles.map((solicitud, indice) => {
                 const pasajero = solicitud.pasajero || {};
                 const ruta = solicitud.ruta || {};
 
@@ -929,7 +929,7 @@ const archivarTarjeta = async (tipo, id) => {
                         Registrada: {obtenerFecha(solicitud.creado_en)}
                       </span>
                     </div>
-                                        <button
+                    <button
                       type="button"
                       onClick={() => archivarTarjeta("solicitudes", solicitud.id)}
                       style={{
@@ -984,7 +984,7 @@ const archivarTarjeta = async (tipo, id) => {
           </div>
         )}
 
-        {!cargando && !error && rutasvisibles.length === 0 && (
+        {!cargando && !error && rutasVisibles.length === 0 && (
           <div className="estado-rutas estado-vacio">
             <div className="ruta-vacia-ilustracion">
               <span></span><span></span><span></span>
@@ -997,7 +997,7 @@ const archivarTarjeta = async (tipo, id) => {
           </div>
         )}
 
-        {!cargando && !error && rutasvisibles.length > 0 && (
+        {!cargando && !error && rutasVisibles.length > 0 && (
           <div className="lista-rutas">
             {rutasOrdenadas.map((ruta, indice) => {
               const cuposTotales = obtenerCuposTotales(ruta);

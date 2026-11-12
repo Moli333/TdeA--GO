@@ -188,6 +188,11 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(true);
   const [error, setError] = useState("");
   const [errorSolicitudes, setErrorSolicitudes] = useState("");
+  const [archivoPersonal, setArchivoPersonal] = useState({
+  reservas: [],
+  rutas: [],
+  solicitudes: [],
+});
 
   useEffect(() => {
     if (!usuario?.id) return;
@@ -308,24 +313,124 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
       }
     };
 
+    const cargarArchivoPersonal = async () => {
+  try {
+    const token = usuario?.token || usuario?.access_token;
+
+    if (!token) {
+      throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
+    }
+
+    const respuesta = await fetch(`${API_URL}/api/archivo`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      throw new Error(datos.mensaje || "No fue posible consultar tu archivo personal.");
+    }
+
+    if (!cancelado) {
+      setArchivoPersonal({
+        reservas: datos.reservas || [],
+        rutas: datos.rutas || [],
+        solicitudes: datos.solicitudes || [],
+      });
+    }
+  } catch (error) {
+    console.error("Error al cargar el archivo personal:", error);
+  }
+};
+
     cargarRutas();
     cargarSolicitudesNuevas();
     cargarReservas();
+    cargarRutas();
+    cargarSolicitudesNuevas();
+    cargarReservas();
+    cargarArchivoPersonal();
 
     return () => {
       cancelado = true;
     };
   }, [usuario?.id, API_URL]);
 
-  const rutasOrdenadas = useMemo(
-    () =>
-      [...rutas].sort((a, b) => {
-        const fechaA = a.fecha_hora_salida || a.fechaHoraSalida || a.fecha_salida || "";
-        const fechaB = b.fecha_hora_salida || b.fechaHoraSalida || b.fecha_salida || "";
-        return new Date(fechaA) - new Date(fechaB);
-      }),
-    [rutas]
+  const estaArchivada = (lista, campoId, id) =>
+  lista.some(
+    (item) =>
+      String(item[campoId]) === String(id) &&
+      ["historial", "papelera"].includes(item.ubicacion)
   );
+
+const reservasVisibles = reservas.filter(
+  (item) => !estaArchivada(archivoPersonal.reservas, "solicitud_id", item.id)
+);
+
+const solicitudesNuevasVisibles = solicitudesNuevas.filter(
+  (item) => !estaArchivada(archivoPersonal.solicitudes, "solicitud_id", item.id)
+);
+
+const rutasVisibles = rutas.filter(
+  (item) => !estaArchivada(
+    archivoPersonal.rutas,
+    "ruta_id",
+    item.id ?? item.id_ruta
+  )
+);
+
+const rutasOrdenadas = useMemo(
+  () =>
+    [...rutasVisibles].sort((a, b) => {
+      const fechaA = a.fecha_hora_salida || a.fechaHoraSalida || a.fecha_salida || "";
+      const fechaB = b.fecha_hora_salida || b.fechaHoraSalida || b.fecha_salida || "";
+      return new Date(fechaA) - new Date(fechaB);
+    }),
+  [rutasVisibles]
+);
+
+const archivarTarjeta = async (tipo, id) => {
+  try {
+    const token = usuario?.token || usuario?.access_token;
+
+    if (!token) {
+      throw new Error("No se encontró la sesión. Inicia sesión nuevamente.");
+    }
+
+    const respuesta = await fetch(
+      `${API_URL}/api/archivo/${tipo}/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ accion: "archivar" }),
+      }
+    );
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      throw new Error(datos.mensaje || "No fue posible archivar la tarjeta.");
+    }
+
+    const campoId = tipo === "rutas" ? "ruta_id" : "solicitud_id";
+
+    setArchivoPersonal((anterior) => ({
+      ...anterior,
+      [tipo]: [
+        ...anterior[tipo],
+        { [campoId]: id, ubicacion: "historial" },
+      ],
+    }));
+  } catch (error) {
+    console.error("Error al archivar tarjeta:", error);
+    alert(error.message || "No fue posible archivar la tarjeta.");
+  }
+};
 
   const obtenerFecha = (fecha) => {
     if (!fecha) return "Fecha no disponible";
@@ -492,9 +597,9 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
           </div>
 
           <div className="resumen-rutas">
-            <span className="resumen-numero">{rutas.length}</span>
+            <span className="resumen-numero">{rutasvisibles.length}</span>
             <span className="resumen-texto">
-              {rutas.length === 1 ? "ruta publicada" : "rutas publicadas"}
+              {rutasvisibles.length === 1 ? "ruta publicada" : "rutas publicadas"}
             </span>
           </div>
         </div>
@@ -512,7 +617,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             </div>
 
             <div className="solicitudes-nuevas-contador">
-              {reservas.length}
+              {reservasVisibles.length}
               <small>Reservas</small>
             </div>
           </div>
@@ -535,7 +640,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             </div>
           )}
 
-          {!cargandoReservas && !errorReservas && reservas.length === 0 && (
+          {!cargandoReservas && !errorReservas && reservasVisibles.length === 0 && (
             <div className="solicitudes-nuevas-vacio">
               <div className="solicitud-vacia-ruta">
                 <span></span>
@@ -549,9 +654,9 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             </div>
           )}
 
-          {!cargandoReservas && !errorReservas && reservas.length > 0 && (
+          {!cargandoReservas && !errorReservas && reservasVisibles.length > 0 && (
             <div className="solicitudes-nuevas-lista">
-              {reservas.map((solicitud, indice) => {
+              {reservasvisibles.map((solicitud, indice) => {
                 const pasajero = solicitud.pasajero || {};
                 const ruta = solicitud.ruta || {};
 
@@ -681,6 +786,22 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                       </div>
                     )}
 
+                    <button
+                      type="button"
+                      onClick={() => archivarTarjeta("reservas", solicitud.id)}
+                      style={{
+                        marginTop: "12px",
+                        padding: "9px 16px",
+                        border: "1px solid #cbd5df",
+                        borderRadius: "8px",
+                        background: "#fff",
+                        color: "#526273",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Archivar
+                    </button>
+
                   </article>
                 );
               })}
@@ -701,7 +822,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
             </div>
 
             <span className="solicitudes-nuevas-contador">
-              {solicitudesNuevas.length}
+              {solicitudesNuevasVisibles.length}
               <small>pendientes</small>
             </span>
           </div>
@@ -727,7 +848,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
 
           {!cargandoSolicitudes &&
             !errorSolicitudes &&
-            solicitudesNuevas.length === 0 && (
+            solicitudesNuevasVisibles.length === 0 && (
               <div className="solicitudes-nuevas-vacio">
                 <div className="solicitud-vacia-ruta">
                   <span></span>
@@ -741,9 +862,9 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
               </div>
             )}
 
-          {!cargandoSolicitudes && !errorSolicitudes && solicitudesNuevas.length > 0 && (
+          {!cargandoSolicitudes && !errorSolicitudes && solicitudesNuevasVisibles.length > 0 && (
             <div className="solicitudes-nuevas-lista">
-              {solicitudesNuevas.map((solicitud) => {
+              {solicitudesNuevasVisibles.map((solicitud) => {
                 const pasajero = solicitud.pasajero || {};
 
                 return (
@@ -808,6 +929,21 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                         Registrada: {obtenerFecha(solicitud.creado_en)}
                       </span>
                     </div>
+                                        <button
+                      type="button"
+                      onClick={() => archivarTarjeta("solicitudes", solicitud.id)}
+                      style={{
+                        marginTop: "12px",
+                        padding: "9px 16px",
+                        border: "1px solid #cbd5df",
+                        borderRadius: "8px",
+                        background: "#fff",
+                        color: "#526273",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Archivar
+                    </button>
                   </article>
                 );
               })}
@@ -848,7 +984,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
           </div>
         )}
 
-        {!cargando && !error && rutas.length === 0 && (
+        {!cargando && !error && rutasvisibles.length === 0 && (
           <div className="estado-rutas estado-vacio">
             <div className="ruta-vacia-ilustracion">
               <span></span><span></span><span></span>
@@ -861,7 +997,7 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
           </div>
         )}
 
-        {!cargando && !error && rutas.length > 0 && (
+        {!cargando && !error && rutasvisibles.length > 0 && (
           <div className="lista-rutas">
             {rutasOrdenadas.map((ruta, indice) => {
               const cuposTotales = obtenerCuposTotales(ruta);
@@ -1069,6 +1205,24 @@ function MisRutas({ usuario, API_URL = import.meta.env.VITE_API_URL || "http://l
                         : "No quedan cupos disponibles"}
                     </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      archivarTarjeta("rutas", ruta.id ?? ruta.id_ruta)
+                    }
+                    style={{
+                      marginTop: "16px",
+                      padding: "9px 16px",
+                      border: "1px solid #cbd5df",
+                      borderRadius: "8px",
+                      background: "#fff",
+                      color: "#526273",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Archivar ruta
+                  </button>
                 </article>
               );
             })}

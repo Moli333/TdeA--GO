@@ -1,4 +1,7 @@
-import express from "express";
+ vehículo antes de publicar una ruta.",
+        requiereVehiculo: true,
+      });
+    }import express from "express";
 import cors from "cors";
 import multer from "multer";
 import crypto from "crypto";
@@ -1628,10 +1631,7 @@ app.post("/api/rutas", verificarAutenticacion, async (req, res) => {
     if (!vehiculoConductor) {
       return res.status(403).json({
         mensaje:
-          "Registra tu vehículo antes de publicar una ruta.",
-        requiereVehiculo: true,
-      });
-    }
+          "Registra tu
 
     // Determinar automáticamente la clasificación tarifaria
     // a partir del vehículo registrado por el conductor.
@@ -3390,6 +3390,229 @@ app.get("/api/vehiculos/:usuarioId", verificarAutenticacion, async (req, res) =>
 // ------------------------------------------------------------------
 // 18. INICIO DEL SERVIDOR
 // ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// ARCHIVO PERSONAL DE TARJETAS
+// Cada usuario administra su propia vista sin modificar el registro original.
+// ------------------------------------------------------------------
+
+app.get("/api/archivo", verificarAutenticacion, async (req, res) => {
+  try {
+    const usuarioId = req.usuarioAutenticado.id;
+
+    const [reservas, rutas, solicitudes] = await Promise.all([
+      dbClient
+        .from("solicitudes_viaje_archivo")
+        .select("solicitud_id, ubicacion, actualizado_en")
+        .eq("usuario_id", usuarioId),
+
+      dbClient
+        .from("rutas_archivo")
+        .select("ruta_id, ubicacion, actualizado_en")
+        .eq("usuario_id", usuarioId),
+
+      dbClient
+        .from("solicitudes_viajes_nuevos_archivo")
+        .select("solicitud_id, ubicacion, actualizado_en")
+        .eq("usuario_id", usuarioId),
+    ]);
+
+    const error = reservas.error || rutas.error || solicitudes.error;
+    if (error) throw error;
+
+    return res.json({
+      reservas: reservas.data || [],
+      rutas: rutas.data || [],
+      solicitudes: solicitudes.data || [],
+    });
+  } catch (error) {
+    console.error("Error consultando archivo personal:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible consultar tu archivo personal.",
+    });
+  }
+});
+
+app.patch(
+  "/api/archivo/:tipo/:id",
+  verificarAutenticacion,
+  async (req, res) => {
+    try {
+      const usuarioId = req.usuarioAutenticado.id;
+      const { tipo, id } = req.params;
+      const { accion } = req.body;
+
+      if (!["reservas", "rutas", "solicitudes"].includes(tipo)) {
+        return res.status(400).json({
+          mensaje: "Tipo de tarjeta no válido.",
+        });
+      }
+
+      if (!["archivar", "restaurar"].includes(accion)) {
+        return res.status(400).json({
+          mensaje: "Acción no válida.",
+        });
+      }
+
+      let tabla;
+      let campoId;
+
+      if (tipo === "reservas") {
+        tabla = "solicitudes_viaje_archivo";
+        campoId = "solicitud_id";
+
+        const { data: reserva, error } = await dbClient
+          .from("solicitudes_viaje")
+          .select(`
+            id,
+            pasajero_id,
+            viaje_id,
+            ruta:rutas!solicitudes_viaje_viaje_id_fkey (
+              conductor_id
+            )
+          `)
+          .eq("id", id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!reserva) {
+          return res.status(404).json({
+            mensaje: "La reserva no existe.",
+          });
+        }
+
+        const autorizado =
+          String(reserva.pasajero_id) === String(usuarioId) ||
+          String(reserva.ruta?.conductor_id) === String(usuarioId);
+
+        if (!autorizado) {
+          return res.status(403).json({
+            mensaje: "No puedes modificar esta tarjeta.",
+          });
+        }
+      }
+
+      if (tipo === "rutas") {
+        tabla = "rutas_archivo";
+        campoId = "ruta_id";
+
+        const { data: ruta, error } = await dbClient
+          .from("rutas")
+          .select("id, conductor_id")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!ruta) {
+          return res.status(404).json({
+            mensaje: "La ruta no existe.",
+          });
+        }
+
+        if (String(ruta.conductor_id) !== String(usuarioId)) {
+          return res.status(403).json({
+            mensaje: "No puedes modificar esta ruta.",
+          });
+        }
+      }
+
+      if (tipo === "solicitudes") {
+        tabla = "solicitudes_viajes_nuevos_archivo";
+        campoId = "solicitud_id";
+
+        const { data: solicitud, error } = await dbClient
+          .from("solicitudes_viajes_nuevos")
+          .select("id, pasajero_id, conductor_id")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!solicitud) {
+          return res.status(404).json({
+            mensaje: "La solicitud no existe.",
+          });
+        }
+
+        let autorizado =
+          String(solicitud.pasajero_id) === String(usuarioId) ||
+          String(solicitud.conductor_id) === String(usuarioId);
+
+        // Las solicitudes sin conductor asignado pueden archivarse
+        // individualmente por un conductor que las tenga disponibles.
+        if (!autorizado && !solicitud.conductor_id) {
+          const { data: perfil, error: errorPerfil } = await dbClient
+            .from("profiles")
+            .select("id, rol")
+            .eq("id", usuarioId)
+            .maybeSingle();
+
+          if (errorPerfil) throw errorPerfil;
+          autorizado = perfil?.rol === "conductor";
+        }
+
+        if (!autorizado) {
+          return res.status(403).json({
+            mensaje: "No puedes modificar esta solicitud.",
+          });
+        }
+      }
+
+      if (accion === "archivar") {
+        const { data, error } = await dbClient
+          .from(tabla)
+          .upsert(
+            {
+              [campoId]: id,
+              usuario_id: usuarioId,
+              ubicacion: "historial",
+              actualizado_en: new Date().toISOString(),
+            },
+            { onConflict: `${campoId},usuario_id` }
+          )
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        return res.json({
+          mensaje: "Tarjeta archivada correctamente.",
+          archivo: data,
+        });
+      }
+
+      const { data: existente, error: errorExistente } = await dbClient
+        .from(tabla)
+        .select("id")
+        .eq(campoId, id)
+        .eq("usuario_id", usuarioId)
+        .maybeSingle();
+
+      if (errorExistente) throw errorExistente;
+
+      if (existente) {
+        const { error } = await dbClient
+          .from(tabla)
+          .update({
+            ubicacion: tipo === "reservas" ? "reservas" : "principal",
+            actualizado_en: new Date().toISOString(),
+          })
+          .eq(campoId, id)
+          .eq("usuario_id", usuarioId);
+
+        if (error) throw error;
+      }
+
+      return res.json({
+        mensaje: "Tarjeta restaurada correctamente.",
+      });
+    } catch (error) {
+      console.error("Error gestionando archivo personal:", error);
+      return res.status(500).json({
+        mensaje: "No fue posible actualizar el archivo personal.",
+      });
+    }
+  }
+);
 
 // ------------------------------------------------------------------
 // LIMPIEZA AUTOMÁTICA
